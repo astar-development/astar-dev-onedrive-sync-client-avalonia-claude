@@ -276,8 +276,7 @@
                 <views:ActivityView
                     IsVisible="{Binding IsActivityActive}"/>
 
-                <views:AccountsView
-                    IsVisible="{Binding IsAccountsActive}"/>
+                <views:AccountsView IsVisible="{Binding IsAccountsActive}"/>
 
                 <views:SettingsView
                     IsVisible="{Binding IsSettingsActive}"/>
@@ -289,7 +288,6 @@
         <!-- ═══════════════════════════════════════════════════════════
              Row 1 — Status bar (spans full width)
         ════════════════════════════════════════════════════════════ -->
-        <!-- Row 1 — Status bar (spans full width) -->
         <Border Grid.Row="1"
                 Background="{DynamicResource BackgroundStatusBarBrush}"
                 BorderThickness="0,1,0,0"

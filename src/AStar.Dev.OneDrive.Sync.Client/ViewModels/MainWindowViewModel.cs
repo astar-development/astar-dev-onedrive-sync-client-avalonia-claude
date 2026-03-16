@@ -3,13 +3,6 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AStar.Dev.OneDrive.Sync.Client.ViewModels;
 
-/// <summary>
-/// Shell-level view model.  Owns:
-///   • Which <see cref="NavSection"/> is active in the icon rail.
-///   • The <see cref="StatusBarViewModel"/> for the bottom bar.
-///   • Placeholder properties for the account panel (populated once
-///     AccountService is wired up in a later step).
-/// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject
 {
     // ── Navigation ────────────────────────────────────────────────────────
@@ -31,15 +24,54 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void Navigate(NavSection section) => ActiveSection = section;
 
-    // ── Status bar ────────────────────────────────────────────────────────
+    // ── Child view models ─────────────────────────────────────────────────
 
+    public AccountsViewModel Accounts { get; } = new();
     public StatusBarViewModel StatusBar { get; } = new();
 
-    // ── Account panel (stub — replaced when AccountService is injected) ───
+    // ── Construction ──────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Display name of the currently-focused account, shown above the status bar.
-    /// Empty when no account is selected.
-    /// </summary>
-    [ObservableProperty] private string _activeAccountName = string.Empty;
+    [RelayCommand]
+    private void AddAccount() => Accounts.AddAccountCommand.Execute(null);
+    
+    public MainWindowViewModel()
+    {
+        System.Diagnostics.Debug.WriteLine($"Accounts1 is null: {Accounts is null}");
+        Accounts.AccountSelected += OnAccountSelected;
+        Accounts.AccountSelected += OnAccountSelected;
+        Accounts.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AccountsViewModel.ActiveAccount))
+                SyncStatusBarToActiveAccount();
+        };
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────
+
+    private void OnAccountSelected(object? sender, AccountCardViewModel card)
+    {
+        // Navigate to Files when an account card is clicked
+        ActiveSection = NavSection.Files;
+        SyncStatusBarToActiveAccount();
+    }
+
+    private void SyncStatusBarToActiveAccount()
+    {
+        var active = Accounts.ActiveAccount;
+        if (active is null)
+        {
+            StatusBar.HasAccount        = false;
+            StatusBar.AccountEmail      = string.Empty;
+            StatusBar.AccountDisplayName = string.Empty;
+            return;
+        }
+
+        StatusBar.HasAccount         = true;
+        StatusBar.AccountEmail       = active.Email;
+        StatusBar.AccountDisplayName = active.DisplayName;
+        StatusBar.SyncState          = active.SyncState;
+        StatusBar.ConflictCount      = active.ConflictCount;
+        StatusBar.LastSyncText       = active.LastSyncText;
+        StatusBar.IsSyncing          = active.SyncState == SyncState.Syncing;
+    }
 }
