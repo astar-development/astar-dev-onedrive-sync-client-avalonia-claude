@@ -1,3 +1,4 @@
+using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
 using AStar.Dev.OneDrive.Sync.Client.Views;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -9,12 +10,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // ── Navigation ────────────────────────────────────────────────────────
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveView))]  // add to the existing list on _activeSection
     [NotifyPropertyChangedFor(nameof(IsDashboardActive))]
     [NotifyPropertyChangedFor(nameof(IsFilesActive))]
     [NotifyPropertyChangedFor(nameof(IsActivityActive))]
     [NotifyPropertyChangedFor(nameof(IsAccountsActive))]
     [NotifyPropertyChangedFor(nameof(IsSettingsActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveView))]
     private NavSection _activeSection = NavSection.Dashboard;
 
     public bool IsDashboardActive => ActiveSection == NavSection.Dashboard;
@@ -26,32 +27,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void Navigate(NavSection section) => ActiveSection = section;
 
-    // ── Child view models ─────────────────────────────────────────────────
+    // ── Active view (lazy-loaded, one instance per section) ───────────────
 
-    public AccountsViewModel Accounts { get; } = new();
-    public StatusBarViewModel StatusBar { get; } = new();
-
-    // ── Construction ──────────────────────────────────────────────────────
-
-    [RelayCommand]
-    private void AddAccount()
-    {
-        //Accounts.AddAccountCommand.Execute(null);
-
-    ActiveSection = NavSection.Accounts;
-    Accounts.AddAccount();
-    }
-
-    public MainWindowViewModel()
-    {
-        Accounts.AccountSelected += OnAccountSelected;
-        Accounts.AccountSelected += OnAccountSelected;
-        Accounts.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(AccountsViewModel.ActiveAccount))
-                SyncStatusBarToActiveAccount();
-        };
-    }
     public object? ActiveView => ActiveSection switch
     {
         NavSection.Dashboard => _dashboardView ??= new DashboardView(),
@@ -67,11 +44,38 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private ActivityView?  _activityView;
     private AccountsView?  _accountsView;
     private SettingsView?  _settingsView;
+
+    // ── Child view models ─────────────────────────────────────────────────
+
+    public AccountsViewModel  Accounts  { get; }
+    public StatusBarViewModel StatusBar { get; } = new();
+
+    // ── Construction ──────────────────────────────────────────────────────
+
+    public MainWindowViewModel(IAuthService authService)
+    {
+        Accounts = new AccountsViewModel(authService);
+        Accounts.AccountSelected += OnAccountSelected;
+        Accounts.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AccountsViewModel.ActiveAccount))
+                SyncStatusBarToActiveAccount();
+        };
+    }
+
+    // ── Add account (entry point from left panel button) ──────────────────
+
+    [RelayCommand]
+    private void AddAccount()
+    {
+        ActiveSection = NavSection.Accounts;
+        Accounts.AddAccount();
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────
 
     private void OnAccountSelected(object? sender, AccountCardViewModel card)
     {
-        // Navigate to Files when an account card is clicked
         ActiveSection = NavSection.Files;
         SyncStatusBarToActiveAccount();
     }
@@ -81,8 +85,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var active = Accounts.ActiveAccount;
         if (active is null)
         {
-            StatusBar.HasAccount        = false;
-            StatusBar.AccountEmail      = string.Empty;
+            StatusBar.HasAccount         = false;
+            StatusBar.AccountEmail       = string.Empty;
             StatusBar.AccountDisplayName = string.Empty;
             return;
         }
