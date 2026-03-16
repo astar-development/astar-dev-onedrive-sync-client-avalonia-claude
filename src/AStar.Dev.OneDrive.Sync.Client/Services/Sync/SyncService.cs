@@ -12,18 +12,18 @@ public sealed class SyncService(
     ISyncRepository    syncRepository) : ISyncService
 {
     public event EventHandler<SyncProgressEventArgs>? SyncProgressChanged;
+    public event EventHandler<JobCompletedEventArgs>? JobCompleted;
+    public event EventHandler<SyncConflict>?          ConflictDetected;
 
     // ── ISyncService ──────────────────────────────────────────────────────
 
     public async Task SyncAccountAsync(
-        OneDriveAccount account,
+        OneDriveAccount   account,
         CancellationToken ct = default)
     {
-        // Acquire token silently — no UI interaction
         var authResult = await authService.AcquireTokenSilentAsync(account.Id, ct);
         if (authResult.IsError)
         {
-            // Token refresh failed — surface via progress event so UI can prompt
             RaiseProgress(account.Id, string.Empty, 0, 0,
                 authResult.ErrorMessage ?? "Auth failed", isComplete: true);
             return;
@@ -31,7 +31,6 @@ public sealed class SyncService(
 
         var token = authResult.AccessToken!;
 
-        // Validate local sync path
         if (string.IsNullOrEmpty(account.LocalSyncPath))
         {
             RaiseProgress(account.Id, string.Empty, 0, 0,
@@ -47,8 +46,8 @@ public sealed class SyncService(
     }
 
     public async Task ResolveConflictAsync(
-        SyncConflict   conflict,
-        ConflictPolicy policy,
+        SyncConflict      conflict,
+        ConflictPolicy    policy,
         CancellationToken ct = default)
     {
         var authResult = await authService
@@ -56,26 +55,26 @@ public sealed class SyncService(
 
         if (authResult.IsError) return;
 
-        var token   = authResult.AccessToken!;
         var outcome = ConflictResolver.Resolve(
             policy,
             conflict.LocalModified,
             conflict.RemoteModified);
 
-        await ApplyConflictOutcomeAsync(conflict, outcome, token, ct);
+        await ApplyConflictOutcomeAsync(
+            conflict, outcome, authResult.AccessToken!, ct);
+
         await syncRepository.ResolveConflictAsync(conflict.Id, policy);
     }
 
-    // ── Private — folder sync ─────────────────────────────────────────────
+    // ── Folder sync ───────────────────────────────────────────────────────
 
     private async Task SyncFolderAsync(
-        OneDriveAccount account,
-        string          token,
-        string          folderId,
+        OneDriveAccount   account,
+        string            token,
+        string            folderId,
         CancellationToken ct)
     {
-        // Get stored delta link for this folder (null = full sync)
-        var entity = await accountRepository.GetByIdAsync(account.Id);
+        var entity       = await accountRepository.GetByIdAsync(account.Id);
         var folderEntity = entity?.SyncFolders
             .FirstOrDefault(f => f.FolderId == folderId);
 
@@ -83,11 +82,11 @@ public sealed class SyncService(
 
         RaiseProgress(account.Id, folderId, 0, 0, "Fetching changes\u2026");
 
-        var delta = await graphService.GetDeltaAsync(token, folderId, deltaLink, ct);
+        var delta = await graphService.GetDeltaAsync(
+            token, folderId, deltaLink, ct);
 
         if (delta.Items.Count == 0)
         {
-            // Persist updated delta link even if no changes
             if (delta.NextDeltaLink is not null)
                 await accountRepository.UpdateDeltaLinkAsync(
                     account.Id, folderId, delta.NextDeltaLink);
@@ -97,30 +96,24 @@ public sealed class SyncService(
             return;
         }
 
-        // Build job queue from delta items
         var jobs = BuildJobs(account, folderId, delta.Items);
+        var (cleanJobs, conflicts) = await ClassifyJobsAsync(account, jobs, ct);
 
-        // Separate conflicts from clean jobs
-        var (cleanJobs, conflicts) = await ClassifyJobsAsync(
-            account, jobs, ct);
-
-        // Queue clean jobs
         if (cleanJobs.Count > 0)
             await syncRepository.EnqueueJobsAsync(cleanJobs);
 
-        // Queue conflicts (do NOT block — user resolves async)
         foreach (var conflict in conflicts)
+        {
             await syncRepository.AddConflictAsync(conflict);
+            ConflictDetected?.Invoke(this, conflict);
+        }
 
-        // Process the clean job queue
         await ProcessJobQueueAsync(account, token, cleanJobs, ct);
 
-        // Persist updated delta link
         if (delta.NextDeltaLink is not null)
             await accountRepository.UpdateDeltaLinkAsync(
                 account.Id, folderId, delta.NextDeltaLink);
 
-        // Update last synced timestamp
         if (entity is not null)
         {
             entity.LastSyncedAt = DateTimeOffset.UtcNow;
@@ -130,23 +123,21 @@ public sealed class SyncService(
         account.LastSyncedAt = DateTimeOffset.UtcNow;
     }
 
-    // ── Private — job building ────────────────────────────────────────────
+    // ── Job building ──────────────────────────────────────────────────────
 
     private static List<SyncJob> BuildJobs(
-        OneDriveAccount  account,
-        string           folderId,
-        List<DeltaItem>  items)
+        OneDriveAccount account,
+        string          folderId,
+        List<DeltaItem> items)
     {
         List<SyncJob> jobs = [];
 
         foreach (var item in items)
         {
-            if (item.IsFolder) continue; // folder structure handled by local mkdir
+            if (item.IsFolder) continue;
 
-            var relativePath = item.Name; // simplified — full path resolution in step 7
-            var localPath    = Path.Combine(
-                account.LocalSyncPath,
-                relativePath);
+            var relativePath = item.Name;
+            var localPath    = Path.Combine(account.LocalSyncPath, relativePath);
 
             if (item.IsDeleted)
             {
@@ -182,12 +173,12 @@ public sealed class SyncService(
         return jobs;
     }
 
-    // ── Private — conflict detection ──────────────────────────────────────
+    // ── Conflict detection ────────────────────────────────────────────────
 
     private async Task<(List<SyncJob> Clean, List<SyncConflict> Conflicts)>
         ClassifyJobsAsync(
-            OneDriveAccount account,
-            List<SyncJob>   jobs,
+            OneDriveAccount   account,
+            List<SyncJob>     jobs,
             CancellationToken ct)
     {
         List<SyncJob>      clean     = [];
@@ -195,8 +186,7 @@ public sealed class SyncService(
 
         foreach (var job in jobs)
         {
-            if (job.Direction == SyncDirection.Delete ||
-                !File.Exists(job.LocalPath))
+            if (job.Direction == SyncDirection.Delete || !File.Exists(job.LocalPath))
             {
                 clean.Add(job);
                 continue;
@@ -206,8 +196,6 @@ public sealed class SyncService(
             var localModified = new DateTimeOffset(
                 localInfo.LastWriteTimeUtc, TimeSpan.Zero);
 
-            // Conflict: local file modified more recently than the
-            // last known remote state (approximated by remote modified time)
             var isConflict = localModified > job.RemoteModified.AddSeconds(-5);
 
             if (!isConflict)
@@ -216,7 +204,6 @@ public sealed class SyncService(
                 continue;
             }
 
-            // Apply account conflict policy immediately
             var outcome = ConflictResolver.Resolve(
                 account.ConflictPolicy,
                 localModified,
@@ -225,7 +212,6 @@ public sealed class SyncService(
             switch (outcome)
             {
                 case ConflictOutcome.Skip:
-                    // Queue as skipped — record it but don't download
                     conflicts.Add(new SyncConflict
                     {
                         AccountId      = account.Id,
@@ -245,14 +231,10 @@ public sealed class SyncService(
                     break;
 
                 case ConflictOutcome.UseLocal:
-                    clean.Add(job with
-                    {
-                        Direction = SyncDirection.Upload
-                    });
+                    clean.Add(job with { Direction = SyncDirection.Upload });
                     break;
 
                 case ConflictOutcome.KeepBoth:
-                    // Rename local then download remote
                     var newName = ConflictResolver.MakeKeepBothName(
                         job.LocalPath, localModified);
                     File.Move(job.LocalPath, newName);
@@ -261,16 +243,16 @@ public sealed class SyncService(
             }
         }
 
-        await Task.CompletedTask; // async signature for future expansion
+        await Task.CompletedTask;
         return (clean, conflicts);
     }
 
-    // ── Private — job processing ──────────────────────────────────────────
+    // ── Job processing ────────────────────────────────────────────────────
 
     private async Task ProcessJobQueueAsync(
-        OneDriveAccount account,
-        string          token,
-        List<SyncJob>   jobs,
+        OneDriveAccount   account,
+        string            token,
+        List<SyncJob>     jobs,
         CancellationToken ct)
     {
         var completed = 0;
@@ -289,13 +271,33 @@ public sealed class SyncService(
             try
             {
                 await ExecuteJobAsync(job, token, ct);
+
+                var completedJob = job with
+                {
+                    State       = SyncJobState.Completed,
+                    CompletedAt = DateTimeOffset.UtcNow
+                };
+
                 await syncRepository.UpdateJobStateAsync(
                     job.Id, SyncJobState.Completed);
+
+                JobCompleted?.Invoke(this,
+                    new JobCompletedEventArgs(completedJob));
             }
             catch (Exception ex)
             {
+                var failedJob = job with
+                {
+                    State        = SyncJobState.Failed,
+                    ErrorMessage = ex.Message,
+                    CompletedAt  = DateTimeOffset.UtcNow
+                };
+
                 await syncRepository.UpdateJobStateAsync(
                     job.Id, SyncJobState.Failed, ex.Message);
+
+                JobCompleted?.Invoke(this,
+                    new JobCompletedEventArgs(failedJob));
             }
 
             completed++;
@@ -309,8 +311,8 @@ public sealed class SyncService(
     }
 
     private static async Task ExecuteJobAsync(
-        SyncJob job,
-        string  token,
+        SyncJob           job,
+        string            token,
         CancellationToken ct)
     {
         switch (job.Direction)
@@ -318,26 +320,24 @@ public sealed class SyncService(
             case SyncDirection.Download:
                 await DownloadFileAsync(job, ct);
                 break;
-
             case SyncDirection.Delete:
                 if (File.Exists(job.LocalPath))
                     File.Delete(job.LocalPath);
                 break;
-
             case SyncDirection.Upload:
-                // Upload implementation wired in a later step
-                // when we add write scopes to the Graph service
+                // Upload wired in a later step
                 break;
         }
     }
 
-    private static async Task DownloadFileAsync(SyncJob job, CancellationToken ct)
+    private static async Task DownloadFileAsync(
+        SyncJob           job,
+        CancellationToken ct)
     {
         if (job.DownloadUrl is null) return;
 
         var dir = Path.GetDirectoryName(job.LocalPath);
-        if (dir is not null)
-            Directory.CreateDirectory(dir);
+        if (dir is not null) Directory.CreateDirectory(dir);
 
         using var http     = new HttpClient();
         using var response = await http.GetAsync(
@@ -350,10 +350,7 @@ public sealed class SyncService(
         await using var file   = File.Create(job.LocalPath);
         await stream.CopyToAsync(file, ct);
 
-        // Preserve remote last-modified timestamp
-        File.SetLastWriteTimeUtc(
-            job.LocalPath,
-            job.RemoteModified.UtcDateTime);
+        File.SetLastWriteTimeUtc(job.LocalPath, job.RemoteModified.UtcDateTime);
     }
 
     private async Task ApplyConflictOutcomeAsync(
@@ -365,7 +362,7 @@ public sealed class SyncService(
         switch (outcome)
         {
             case ConflictOutcome.UseRemote:
-                var downloadJob = new SyncJob
+                var job = new SyncJob
                 {
                     AccountId      = conflict.AccountId,
                     FolderId       = conflict.FolderId,
@@ -375,7 +372,7 @@ public sealed class SyncService(
                     Direction      = SyncDirection.Download,
                     RemoteModified = conflict.RemoteModified
                 };
-                await ExecuteJobAsync(downloadJob, token, ct);
+                await ExecuteJobAsync(job, token, ct);
                 break;
 
             case ConflictOutcome.KeepBoth:
@@ -383,11 +380,6 @@ public sealed class SyncService(
                     conflict.LocalPath, conflict.LocalModified);
                 if (File.Exists(conflict.LocalPath))
                     File.Move(conflict.LocalPath, keepBothName);
-                break;
-
-            case ConflictOutcome.Skip:
-            case ConflictOutcome.UseLocal:
-            default:
                 break;
         }
     }

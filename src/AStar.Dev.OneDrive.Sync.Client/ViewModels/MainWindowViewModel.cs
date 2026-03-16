@@ -1,3 +1,4 @@
+using AStar.Dev.OneDrive.Sync.Client.Data.Repositories;
 using AStar.Dev.OneDrive.Sync.Client.Models;
 using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
 using AStar.Dev.OneDrive.Sync.Client.Services.Graph;
@@ -15,7 +16,8 @@ public sealed partial class MainWindowViewModel(
     IGraphService   graphService,
     IStartupService startupService,
     ISyncService    syncService,
-    SyncScheduler   scheduler) : ObservableObject
+    SyncScheduler   scheduler,
+    ISyncRepository syncRepository) : ObservableObject
 {
     // ── Navigation ────────────────────────────────────────────────────────
 
@@ -41,17 +43,18 @@ public sealed partial class MainWindowViewModel(
 
     public object? ActiveView => ActiveSection switch
     {
-        NavSection.Dashboard => _dashboardView ??= new DashboardView(),
+        NavSection.Dashboard => _dashboardView  ??= new DashboardView(),
         NavSection.Files     => FilesViewInstance,
-        NavSection.Activity  => _activityView  ??= new ActivityView(),
+        NavSection.Activity  => ActivityViewInstance,
         NavSection.Accounts  => AccountsViewInstance,
-        NavSection.Settings  => _settingsView  ??= new SettingsView(),
+        NavSection.Settings  => _settingsView   ??= new SettingsView(),
         _                    => null
     };
 
-    // Views with specific DataContexts set at creation time
     private FilesView    FilesViewInstance    =>
         _filesView    ??= new FilesView    { DataContext = Files };
+    private ActivityView ActivityViewInstance =>
+        _activityView ??= new ActivityView { DataContext = Activity };
     private AccountsView AccountsViewInstance =>
         _accountsView ??= new AccountsView { DataContext = this };
 
@@ -69,15 +72,21 @@ public sealed partial class MainWindowViewModel(
     public FilesViewModel     Files     { get; } =
         new(authService, graphService, App.Repository);
 
+    public ActivityViewModel  Activity  { get; } =
+        new(syncService, syncRepository);
+
     public StatusBarViewModel StatusBar { get; } = new();
 
     // ── Startup ───────────────────────────────────────────────────────────
 
     public async Task InitialiseAsync()
     {
-        // Wire sync progress to status bar
+        // Wire sync events
         syncService.SyncProgressChanged += OnSyncProgressChanged;
+        syncService.JobCompleted        += OnJobCompleted;
+        syncService.ConflictDetected    += OnConflictDetected;
 
+        // Wire account events
         Accounts.AccountSelected += OnAccountSelected;
         Accounts.AccountAdded    += OnAccountAdded;
         Accounts.AccountRemoved  += OnAccountRemoved;
@@ -95,7 +104,10 @@ public sealed partial class MainWindowViewModel(
 
         var active = restored.FirstOrDefault(a => a.IsActive);
         if (active is not null)
+        {
             await Files.ActivateAccountAsync(active.Id);
+            await Activity.SetActiveAccountAsync(active.Id, active.Email);
+        }
 
         SyncStatusBarToActiveAccount();
     }
@@ -108,7 +120,16 @@ public sealed partial class MainWindowViewModel(
         var active = Accounts.ActiveAccount;
         if (active is null) return;
 
-        var account = BuildAccountModel(active);
+        var account = new OneDriveAccount
+        {
+            Id                = active.Id,
+            DisplayName       = active.DisplayName,
+            Email             = active.Email,
+            LocalSyncPath     = string.Empty, // populated from DB in scheduler
+            ConflictPolicy    = ConflictPolicy.Ignore,
+            SelectedFolderIds = []
+        };
+
         await scheduler.TriggerAccountAsync(account);
     }
 
@@ -127,6 +148,7 @@ public sealed partial class MainWindowViewModel(
     {
         ActiveSection = NavSection.Files;
         await Files.ActivateAccountAsync(card.Id);
+        await Activity.SetActiveAccountAsync(card.Id, card.Email);
         SyncStatusBarToActiveAccount();
     }
 
@@ -135,6 +157,7 @@ public sealed partial class MainWindowViewModel(
         Files.AddAccount(account);
         ActiveSection = NavSection.Files;
         await Files.ActivateAccountAsync(account.Id);
+        await Activity.SetActiveAccountAsync(account.Id, account.Email);
     }
 
     private void OnAccountRemoved(object? sender, string accountId) =>
@@ -142,27 +165,44 @@ public sealed partial class MainWindowViewModel(
 
     private void OnSyncProgressChanged(object? sender, SyncProgressEventArgs e)
     {
-        // Marshal to UI thread — sync runs on background threads
         Dispatcher.UIThread.Post(() =>
         {
-            var card = Accounts.Accounts
-                .FirstOrDefault(a => a.Id == e.AccountId);
-
+            var card = Accounts.Accounts.FirstOrDefault(a => a.Id == e.AccountId);
             if (card is null) return;
 
-            if (e.IsComplete)
-            {
-                card.SyncState = e.Total == 0
-                    ? SyncState.Idle
-                    : SyncState.Idle;
-            }
-            else
-            {
-                card.SyncState = SyncState.Syncing;
-            }
+            card.SyncState = e.IsComplete ? SyncState.Idle : SyncState.Syncing;
 
             if (card.Id == Accounts.ActiveAccount?.Id)
                 SyncStatusBarToActiveAccount();
+        });
+    }
+
+    private void OnJobCompleted(object? sender, JobCompletedEventArgs e)
+    {
+        var card = Accounts.Accounts
+            .FirstOrDefault(a => a.Id == e.Job.AccountId);
+
+        var item = ActivityItemViewModel.FromJob(
+            e.Job,
+            accountEmail: card?.Email ?? e.Job.AccountId,
+            folderName:   string.Empty);
+
+        Activity.AddActivityItem(item);
+    }
+
+    private void OnConflictDetected(object? sender, SyncConflict conflict)
+    {
+        Activity.AddConflictItem(conflict);
+
+        // Update conflict count on the card
+        Dispatcher.UIThread.Post(() =>
+        {
+            var card = Accounts.Accounts
+                .FirstOrDefault(a => a.Id == conflict.AccountId);
+            if (card is not null)
+                card.ConflictCount++;
+
+            SyncStatusBarToActiveAccount();
         });
     }
 
@@ -185,12 +225,4 @@ public sealed partial class MainWindowViewModel(
         StatusBar.LastSyncText       = active.LastSyncText;
         StatusBar.IsSyncing          = active.SyncState == SyncState.Syncing;
     }
-
-    private static OneDriveAccount BuildAccountModel(AccountCardViewModel card) =>
-        new()
-        {
-            Id          = card.Id,
-            DisplayName = card.DisplayName,
-            Email       = card.Email
-        };
 }

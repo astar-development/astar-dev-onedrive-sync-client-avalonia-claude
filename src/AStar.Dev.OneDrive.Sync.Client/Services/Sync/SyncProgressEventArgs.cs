@@ -14,6 +14,5 @@ public sealed class SyncProgressEventArgs(
     public int    Total       { get; } = total;
     public string CurrentFile { get; } = currentFile;
     public bool   IsComplete  { get; } = isComplete;
-
-    public double Fraction => Total > 0 ? (double)Completed / Total : 0;
+    public double Fraction    => Total > 0 ? (double)Completed / Total : 0;
 }

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.X11;
 using AStar.Dev.OneDrive.Sync.Client.Data;
 using AStar.Dev.OneDrive.Sync.Client.Data.Repositories;
 using AStar.Dev.OneDrive.Sync.Client.Services;
@@ -67,13 +68,12 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = new MainWindow(
-                authService, graphService, startupService, syncService, scheduler);
+                authService, graphService, startupService,
+                syncService, scheduler, syncRepository);
 
-            // Start scheduler after window is shown
             desktop.MainWindow.Opened += (_, _) =>
                 scheduler.Start(SyncScheduler.DefaultInterval);
 
-            // Stop scheduler on exit
             desktop.Exit += async (_, _) =>
                 await scheduler.DisposeAsync();
         }

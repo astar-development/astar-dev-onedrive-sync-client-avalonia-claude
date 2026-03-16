@@ -27,4 +27,10 @@ public interface ISyncService
 
     /// <summary>Raised whenever sync progress changes for any account.</summary>
     event EventHandler<SyncProgressEventArgs> SyncProgressChanged;
+
+    /// <summary>Raised when a file job completes (success or failure).</summary>
+    event EventHandler<JobCompletedEventArgs> JobCompleted;
+
+    /// <summary>Raised when a new conflict is detected and queued.</summary>
+    event EventHandler<SyncConflict> ConflictDetected;
 }

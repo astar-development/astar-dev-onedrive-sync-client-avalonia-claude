@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using AStar.Dev.OneDrive.Sync.Client.Data.Repositories;
 using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
 using AStar.Dev.OneDrive.Sync.Client.Services.Graph;
 using AStar.Dev.OneDrive.Sync.Client.Services.Startup;
@@ -14,11 +15,13 @@ public partial class MainWindow : Window
         IGraphService   graphService,
         IStartupService startupService,
         ISyncService    syncService,
-        SyncScheduler   scheduler)
+        SyncScheduler   scheduler,
+        ISyncRepository syncRepository)
     {
         InitializeComponent();
         var vm = new MainWindowViewModel(
-            authService, graphService, startupService, syncService, scheduler);
+            authService, graphService, startupService,
+            syncService, scheduler, syncRepository);
         DataContext = vm;
         Opened += async (_, _) => await vm.InitialiseAsync();
     }
