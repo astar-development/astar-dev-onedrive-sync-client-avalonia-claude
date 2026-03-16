@@ -21,6 +21,8 @@
             <converters:BoolToExcludeIncludeLabelConverter      x:Key="BoolToExcludeIncludeLabelConverter"/>
             <converters:BoolToExcludeIncludeTooltipConverter    x:Key="BoolToExcludeIncludeTooltipConverter"/>
             <converters:BoolToCollapseExpandConverter           x:Key="BoolToCollapseExpandConverter"/>
+            <converters:ConflictCountToColorConverter x:Key="ConflictCountToColorConverter"/>
+            <converters:IntZeroToBoolConverter        x:Key="IntZeroToBoolConverter"/>
 
         </ResourceDictionary>
     </Application.Resources>

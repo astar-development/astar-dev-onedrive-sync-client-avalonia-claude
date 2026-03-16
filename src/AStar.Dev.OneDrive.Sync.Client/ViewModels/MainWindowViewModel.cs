@@ -2,6 +2,7 @@ using AStar.Dev.OneDrive.Sync.Client.Data.Repositories;
 using AStar.Dev.OneDrive.Sync.Client.Models;
 using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
 using AStar.Dev.OneDrive.Sync.Client.Services.Graph;
+using AStar.Dev.OneDrive.Sync.Client.Services.Settings;
 using AStar.Dev.OneDrive.Sync.Client.Services.Startup;
 using AStar.Dev.OneDrive.Sync.Client.Services.Sync;
 using AStar.Dev.OneDrive.Sync.Client.Views;
@@ -12,12 +13,14 @@ using CommunityToolkit.Mvvm.Input;
 namespace AStar.Dev.OneDrive.Sync.Client.ViewModels;
 
 public sealed partial class MainWindowViewModel(
-    IAuthService    authService,
-    IGraphService   graphService,
-    IStartupService startupService,
-    ISyncService    syncService,
-    SyncScheduler   scheduler,
-    ISyncRepository syncRepository) : ObservableObject
+    IAuthService     authService,
+    IGraphService    graphService,
+    IStartupService  startupService,
+    ISyncService     syncService,
+    SyncScheduler    scheduler,
+    ISyncRepository  syncRepository,
+    ISettingsService settingsService,
+    IAccountRepository accountRepository) : ObservableObject
 {
     // ── Navigation ────────────────────────────────────────────────────────
 
@@ -43,20 +46,24 @@ public sealed partial class MainWindowViewModel(
 
     public object? ActiveView => ActiveSection switch
     {
-        NavSection.Dashboard => _dashboardView  ??= new DashboardView(),
+        NavSection.Dashboard => DashboardViewInstance,
         NavSection.Files     => FilesViewInstance,
         NavSection.Activity  => ActivityViewInstance,
         NavSection.Accounts  => AccountsViewInstance,
-        NavSection.Settings  => _settingsView   ??= new SettingsView(),
+        NavSection.Settings  => SettingsViewInstance,
         _                    => null
     };
 
+    private DashboardView DashboardViewInstance =>
+        _dashboardView ??= new DashboardView { DataContext = Dashboard };
     private FilesView    FilesViewInstance    =>
         _filesView    ??= new FilesView    { DataContext = Files };
     private ActivityView ActivityViewInstance =>
         _activityView ??= new ActivityView { DataContext = Activity };
     private AccountsView AccountsViewInstance =>
         _accountsView ??= new AccountsView { DataContext = this };
+    private SettingsView SettingsViewInstance =>
+        _settingsView ??= new SettingsView { DataContext = Settings };
 
     private DashboardView? _dashboardView;
     private FilesView?     _filesView;
@@ -75,18 +82,22 @@ public sealed partial class MainWindowViewModel(
     public ActivityViewModel  Activity  { get; } =
         new(syncService, syncRepository);
 
+    public DashboardViewModel Dashboard { get; } =
+        new(scheduler);
+
+    public SettingsViewModel  Settings  { get; } =
+        new(settingsService, App.Theme, scheduler, accountRepository);
+
     public StatusBarViewModel StatusBar { get; } = new();
 
     // ── Startup ───────────────────────────────────────────────────────────
 
     public async Task InitialiseAsync()
     {
-        // Wire sync events
         syncService.SyncProgressChanged += OnSyncProgressChanged;
         syncService.JobCompleted        += OnJobCompleted;
         syncService.ConflictDetected    += OnConflictDetected;
 
-        // Wire account events
         Accounts.AccountSelected += OnAccountSelected;
         Accounts.AccountAdded    += OnAccountAdded;
         Accounts.AccountRemoved  += OnAccountRemoved;
@@ -97,11 +108,15 @@ public sealed partial class MainWindowViewModel(
         };
 
         var restored = await startupService.RestoreAccountsAsync();
-        System.Diagnostics.Debug.WriteLine($"Restored count: {restored.Count}");
         Accounts.RestoreAccounts(restored);
 
         foreach (var account in restored)
+        {
             Files.AddAccount(account);
+            Dashboard.AddAccount(account);
+        }
+
+        Settings.LoadAccounts(restored);
 
         var active = restored.FirstOrDefault(a => a.IsActive);
         if (active is not null)
@@ -121,14 +136,17 @@ public sealed partial class MainWindowViewModel(
         var active = Accounts.ActiveAccount;
         if (active is null) return;
 
+        var entity = await App.Repository.GetByIdAsync(active.Id);
+        if (entity is null) return;
+
         var account = new OneDriveAccount
         {
-            Id                = active.Id,
-            DisplayName       = active.DisplayName,
-            Email             = active.Email,
-            LocalSyncPath     = string.Empty, // populated from DB in scheduler
-            ConflictPolicy    = ConflictPolicy.Ignore,
-            SelectedFolderIds = []
+            Id                = entity.Id,
+            DisplayName       = entity.DisplayName,
+            Email             = entity.Email,
+            LocalSyncPath     = entity.LocalSyncPath,
+            ConflictPolicy    = entity.ConflictPolicy,
+            SelectedFolderIds = [.. entity.SyncFolders.Select(f => f.FolderId)]
         };
 
         await scheduler.TriggerAccountAsync(account);
@@ -156,13 +174,19 @@ public sealed partial class MainWindowViewModel(
     private async void OnAccountAdded(object? sender, OneDriveAccount account)
     {
         Files.AddAccount(account);
+        Dashboard.AddAccount(account);
+        Settings.AddAccount(account);
         ActiveSection = NavSection.Files;
         await Files.ActivateAccountAsync(account.Id);
         await Activity.SetActiveAccountAsync(account.Id, account.Email);
     }
 
-    private void OnAccountRemoved(object? sender, string accountId) =>
+    private void OnAccountRemoved(object? sender, string accountId)
+    {
         Files.RemoveAccount(accountId);
+        Dashboard.RemoveAccount(accountId);
+        Settings.RemoveAccount(accountId);
+    }
 
     private void OnSyncProgressChanged(object? sender, SyncProgressEventArgs e)
     {
@@ -173,6 +197,11 @@ public sealed partial class MainWindowViewModel(
 
             card.SyncState = e.IsComplete ? SyncState.Idle : SyncState.Syncing;
 
+            Dashboard.UpdateAccountSyncState(
+                e.AccountId,
+                card.SyncState,
+                card.ConflictCount);
+
             if (card.Id == Accounts.ActiveAccount?.Id)
                 SyncStatusBarToActiveAccount();
         });
@@ -180,8 +209,7 @@ public sealed partial class MainWindowViewModel(
 
     private void OnJobCompleted(object? sender, JobCompletedEventArgs e)
     {
-        var card = Accounts.Accounts
-            .FirstOrDefault(a => a.Id == e.Job.AccountId);
+        var card = Accounts.Accounts.FirstOrDefault(a => a.Id == e.Job.AccountId);
 
         var item = ActivityItemViewModel.FromJob(
             e.Job,
@@ -189,20 +217,23 @@ public sealed partial class MainWindowViewModel(
             folderName:   string.Empty);
 
         Activity.AddActivityItem(item);
+        Dashboard.AddActivityItem(item);
     }
 
     private void OnConflictDetected(object? sender, SyncConflict conflict)
     {
         Activity.AddConflictItem(conflict);
 
-        // Update conflict count on the card
         Dispatcher.UIThread.Post(() =>
         {
             var card = Accounts.Accounts
                 .FirstOrDefault(a => a.Id == conflict.AccountId);
             if (card is not null)
+            {
                 card.ConflictCount++;
-
+                Dashboard.UpdateAccountSyncState(
+                    conflict.AccountId, card.SyncState, card.ConflictCount);
+            }
             SyncStatusBarToActiveAccount();
         });
     }
