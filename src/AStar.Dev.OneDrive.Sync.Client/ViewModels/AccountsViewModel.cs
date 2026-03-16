@@ -65,6 +65,8 @@ public sealed partial class AccountsViewModel(
         }
 
         OnPropertyChanged(nameof(HasAccounts));
+        System.Diagnostics.Debug.WriteLine(
+    $"AccountsViewModel instance: {GetHashCode()} Count: {Accounts.Count} - RestoreAccounts: Restored {accounts.Count()} accounts, active account is {ActiveAccount?.Email}");
     }
 
     // ── Commands ──────────────────────────────────────────────────────────
@@ -107,7 +109,8 @@ public sealed partial class AccountsViewModel(
             ActiveAccount = card;
 
         // Notify MainWindowViewModel to add a Files tab
-        AccountAdded?.Invoke(this, account);
+        AccountAdded?.Invoke(this, account);System.Diagnostics.Debug.WriteLine(
+    $"AccountsViewModel instance: {GetHashCode()} Count: {Accounts.Count} - OnWizardCompleted: Added account {account.Email} with ID {account.Id}");
     }
 
     private void OnWizardCancelled(object? sender, EventArgs e) => CloseWizard();
@@ -158,10 +161,11 @@ public sealed partial class AccountsViewModel(
         LocalSyncPath  = a.LocalSyncPath,
         ConflictPolicy = a.ConflictPolicy,
         QuotaUsed    = a.QuotaUsed,
-        SyncFolders  = [.. a.SelectedFolderIds.Select(id => new SyncFolderEntity
+        SyncFolders = [.. a.SelectedFolderIds.Select(id => new SyncFolderEntity
         {
-            FolderId  = id,
-            AccountId = a.Id
+            FolderId   = id,
+            FolderName = a.FolderNames.GetValueOrDefault(id, string.Empty),
+            AccountId  = a.Id
         })]
     };
 }

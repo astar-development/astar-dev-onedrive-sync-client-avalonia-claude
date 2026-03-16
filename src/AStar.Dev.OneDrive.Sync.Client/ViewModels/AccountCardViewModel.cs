@@ -17,6 +17,7 @@ public sealed partial class AccountCardViewModel : ObservableObject
     public string Id          => _model.Id;
     public string DisplayName => _model.DisplayName;
     public string Email       => _model.Email;
+    public Color AccentColor => Color.Parse(PaletteHex(_model.AccentIndex));
 
     /// <summary>
     /// Two-letter initials derived from DisplayName (e.g. "JS" for "Jason Smith").

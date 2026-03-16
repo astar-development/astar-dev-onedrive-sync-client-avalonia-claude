@@ -97,6 +97,7 @@ public sealed partial class MainWindowViewModel(
         };
 
         var restored = await startupService.RestoreAccountsAsync();
+        System.Diagnostics.Debug.WriteLine($"Restored count: {restored.Count}");
         Accounts.RestoreAccounts(restored);
 
         foreach (var account in restored)

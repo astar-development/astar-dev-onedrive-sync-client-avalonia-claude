@@ -33,7 +33,8 @@ public sealed class OneDriveAccount
     public long           QuotaUsed         { get; set; }
     /// <summary>Whether this account is currently active / selected in the UI.</summary>
     public bool           IsActive          { get; set; }
-
+    /// <summary>Maps folder ID to display name — kept in sync with SelectedFolderIds.</summary>
+    public Dictionary<string, string> FolderNames { get; set; } = [];
     // Sync settings
     public string         LocalSyncPath     { get; set; } = string.Empty;
     public ConflictPolicy ConflictPolicy    { get; set; } = ConflictPolicy.Ignore;

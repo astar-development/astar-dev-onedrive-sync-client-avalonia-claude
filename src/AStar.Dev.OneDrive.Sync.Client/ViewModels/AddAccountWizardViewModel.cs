@@ -213,11 +213,11 @@ public sealed partial class AddAccountWizardViewModel(
             Id                = _accountId,
             DisplayName       = ConfirmedDisplayName,
             Email             = ConfirmedEmail,
-            SelectedFolderIds = [.. Folders
+            SelectedFolderIds = [.. Folders.Where(f => f.IsSelected).Select(f => f.Id)],
+            FolderNames       = Folders
                 .Where(f => f.IsSelected)
-                .Select(f => f.Id)]
+                .ToDictionary(f => f.Id, f => f.Name)
         };
-
         Completed?.Invoke(this, account);
     }
 }

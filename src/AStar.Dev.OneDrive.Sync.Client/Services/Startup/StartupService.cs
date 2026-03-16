@@ -24,6 +24,10 @@ public sealed class StartupService(
 
         // Only restore accounts that still have a valid cached MSAL token
         var cachedIds = (await authService.GetCachedAccountIdsAsync()).ToHashSet();
+        System.Diagnostics.Debug.WriteLine($"Cached MSAL IDs: {string.Join(", ", cachedIds)}");
+
+        foreach (var entity in entities)
+            System.Diagnostics.Debug.WriteLine($"DB account: {entity.Id} | {entity.Email}");
 
         List<OneDriveAccount> accounts = [];
 
@@ -57,6 +61,9 @@ public sealed class StartupService(
             foreach (var a in accounts.Where(a => a.IsActive).Skip(1))
                 a.IsActive = false;
         }
+
+        if (accounts.Count > 0 && !accounts.Any(a => a.IsActive))
+            accounts[0].IsActive = true;
 
         return accounts;
     }
