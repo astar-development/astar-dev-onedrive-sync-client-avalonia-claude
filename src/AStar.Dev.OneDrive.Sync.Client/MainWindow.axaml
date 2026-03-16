@@ -18,23 +18,16 @@
         ExtendClientAreaTitleBarHeightHint="-1">
 
     <Window.Resources>
-        <!-- Nav icon path geometries (Material Design outline paths, 24×24 grid) -->
-
-        <!-- Dashboard: four squares -->
         <Geometry x:Key="IconDashboard">
             M3,3 H10 V10 H3 V3 Z
             M14,3 H21 V10 H14 V3 Z
             M3,14 H10 V21 H3 V14 Z
             M14,14 H21 V21 H14 V14 Z
         </Geometry>
-
-        <!-- Files: folder -->
         <Geometry x:Key="IconFiles">
             M10,4 H4 C2.9,4 2,4.9 2,6 V18 C2,19.1 2.9,20 4,20 H20 C21.1,20 22,19.1 22,18
             V8 C22,6.9 21.1,6 20,6 H12 L10,4 Z
         </Geometry>
-
-        <!-- Activity: list with clock overlay -->
         <Geometry x:Key="IconActivity">
             M13,3 H11 V13 H13 V3 Z
             M18.66,4.34 L17.24,5.76 C18.99,7.5 20,9.86 20,12.5
@@ -43,15 +36,11 @@
             C5.31,2.42 1,7.02 1,12.5 C1,18.3 5.7,23 11.5,23
             C17.3,23 22,18.3 22,12.5 C22,9.27 20.6,6.36 18.66,4.34 Z
         </Geometry>
-
-        <!-- Accounts: person with plus -->
         <Geometry x:Key="IconAccounts">
             M12,12 C14.21,12 16,10.21 16,8 C16,5.79 14.21,4 12,4
             C9.79,4 8,5.79 8,8 C8,10.21 9.79,12 12,12 Z
             M12,14 C9.33,14 4,15.34 4,18 V20 H20 V18 C20,15.34 14.67,14 12,14 Z
         </Geometry>
-
-        <!-- Settings: gear -->
         <Geometry x:Key="IconSettings">
             M19.14,12.94 C19.18,12.64 19.2,12.33 19.2,12
             C19.2,11.68 19.18,11.36 19.13,11.06 L21.16,9.48
@@ -76,37 +65,28 @@
             C8.4,10.02 10.02,8.4 12,8.4 C13.98,8.4 15.6,10.02 15.6,12
             C15.6,13.98 13.98,15.6 12,15.6 Z
         </Geometry>
-
     </Window.Resources>
 
-    <!-- Root layout: icon rail | account panel | content area
-         Status bar is docked to the bottom of the full width -->
+    <!-- Root: Row 0 = working area, Row 1 = status bar -->
     <Grid RowDefinitions="*,Auto">
 
-        <!-- ═══════════════════════════════════════════════════════════
-             Row 0 — three-column working area
-        ════════════════════════════════════════════════════════════ -->
+        <!-- ── Row 0 — three-column working area ── -->
         <Grid Grid.Row="0"
               ColumnDefinitions="Auto,Auto,*">
 
-            <!-- ─────────────────────────────────────────────────────
-                 Column 0 — Icon rail
-            ────────────────────────────────────────────────────── -->
+            <!-- Column 0 — Icon rail -->
             <Border Grid.Column="0"
                     Background="{DynamicResource BackgroundRailBrush}"
                     BorderThickness="0,0,1,0"
                     BorderBrush="{DynamicResource BorderSubtleBrush}"
                     Width="{StaticResource IconRailWidth}">
-
                 <DockPanel LastChildFill="False">
 
-                    <!-- App logo mark at top -->
                     <Border DockPanel.Dock="Top"
                             Height="{StaticResource IconRailWidth}"
                             Width="{StaticResource IconRailWidth}"
                             ToolTip.Tip="OneDrive Sync">
                         <Viewbox Width="22" Height="22">
-                            <!-- Simple cloud-sync mark -->
                             <Canvas Width="24" Height="24">
                                 <Path Fill="{DynamicResource TextAccentBrush}"
                                       Data="M19.35,10.04 C18.67,6.59 15.64,4 12,4
@@ -119,70 +99,57 @@
                         </Viewbox>
                     </Border>
 
-                    <!-- Primary nav buttons (top group) -->
                     <StackPanel DockPanel.Dock="Top"
                                 Spacing="2"
                                 Margin="0,8,0,0">
-
                         <controls:IconRailButton
                             IconData="{StaticResource IconDashboard}"
                             TooltipLabel="Dashboard — all accounts overview"
                             IsActive="{Binding IsDashboardActive}"
                             Command="{Binding NavigateCommand}"
                             CommandParameter="{x:Static local:NavSection.Dashboard}"/>
-
                         <controls:IconRailButton
                             IconData="{StaticResource IconFiles}"
                             TooltipLabel="Files — browse and manage sync folders"
                             IsActive="{Binding IsFilesActive}"
                             Command="{Binding NavigateCommand}"
                             CommandParameter="{x:Static local:NavSection.Files}"/>
-
                         <controls:IconRailButton
                             IconData="{StaticResource IconActivity}"
                             TooltipLabel="Activity — delta log and conflicts"
                             IsActive="{Binding IsActivityActive}"
                             Command="{Binding NavigateCommand}"
                             CommandParameter="{x:Static local:NavSection.Activity}"/>
-
                         <controls:IconRailButton
                             IconData="{StaticResource IconAccounts}"
                             TooltipLabel="Accounts — add or remove OneDrive accounts"
                             IsActive="{Binding IsAccountsActive}"
                             Command="{Binding NavigateCommand}"
                             CommandParameter="{x:Static local:NavSection.Accounts}"/>
-
                     </StackPanel>
 
-                    <!-- Settings pinned to bottom -->
                     <StackPanel DockPanel.Dock="Bottom"
                                 Spacing="2"
                                 Margin="0,0,0,8">
-
                         <controls:IconRailButton
                             IconData="{StaticResource IconSettings}"
                             TooltipLabel="Settings — theme, language and sync policy"
                             IsActive="{Binding IsSettingsActive}"
                             Command="{Binding NavigateCommand}"
                             CommandParameter="{x:Static local:NavSection.Settings}"/>
-
                     </StackPanel>
 
                 </DockPanel>
             </Border>
 
-            <!-- ─────────────────────────────────────────────────────
-                 Column 1 — Account panel (collapsible in future)
-            ────────────────────────────────────────────────────── -->
+            <!-- Column 1 — Account panel -->
             <Border Grid.Column="1"
                     Width="{StaticResource AccountPanelWidth}"
                     Background="{DynamicResource BackgroundAccountPanelBrush}"
                     BorderThickness="0,0,1,0"
                     BorderBrush="{DynamicResource BorderSubtleBrush}">
-
                 <DockPanel LastChildFill="True">
 
-                    <!-- Panel header -->
                     <Border DockPanel.Dock="Top"
                             Height="{StaticResource IconRailWidth}"
                             Padding="12,0">
@@ -196,18 +163,38 @@
 
                     <Rectangle DockPanel.Dock="Top"
                                Height="1"
-                               Fill="{DynamicResource BorderSubtleBrush}"
-                               Margin="0"/>
+                               Fill="{DynamicResource BorderSubtleBrush}"/>
 
-                    <!-- Account list — populated by AccountsViewModel in a later step.
-                         For now shows a placeholder. -->
+                    <Border DockPanel.Dock="Bottom"
+                            BorderThickness="0,1,0,0"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                            Padding="8">
+                        <Button HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Padding="0,6"
+                                CornerRadius="{StaticResource RadiusMd}"
+                                Background="Transparent"
+                                BorderBrush="{DynamicResource BorderDefaultBrush}"
+                                BorderThickness="1"
+                                Command="{Binding AddAccountCommand}"
+                                Cursor="Hand">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="+"
+                                           FontSize="{StaticResource FontSizeLg}"
+                                           Foreground="{DynamicResource TextAccentBrush}"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="Add account"
+                                           FontSize="{StaticResource FontSizeSm}"
+                                           Foreground="{DynamicResource TextAccentBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </Border>
+
                     <ScrollViewer DockPanel.Dock="Top"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel x:Name="AccountListPanel"
-                                    Margin="0,4">
-
-                            <!-- Placeholder empty state -->
+                        <StackPanel Margin="0,4">
                             <StackPanel HorizontalAlignment="Center"
                                         Margin="12,32,12,0"
                                         Spacing="6">
@@ -224,70 +211,22 @@
                                            TextWrapping="Wrap"
                                            TextAlignment="Center"/>
                             </StackPanel>
-
                         </StackPanel>
                     </ScrollViewer>
-
-                    <!-- Add account button pinned to bottom -->
-                    <Border DockPanel.Dock="Bottom"
-                            BorderThickness="0,1,0,0"
-                            BorderBrush="{DynamicResource BorderSubtleBrush}"
-                            Padding="8">
-                        <Button HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Center"
-                                Padding="0,6"
-                                CornerRadius="{StaticResource RadiusMd}"
-                                Background="Transparent"
-                                BorderBrush="{DynamicResource BorderDefaultBrush}"
-                                BorderThickness="1"
-                                Cursor="Hand">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock Text="+"
-                                           FontSize="{StaticResource FontSizeLg}"
-                                           Foreground="{DynamicResource TextAccentBrush}"
-                                           VerticalAlignment="Center"/>
-                                <TextBlock Text="Add account"
-                                           FontSize="{StaticResource FontSizeSm}"
-                                           Foreground="{DynamicResource TextAccentBrush}"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                    </Border>
 
                 </DockPanel>
             </Border>
 
-            <!-- ─────────────────────────────────────────────────────
-                 Column 2 — Main content area (tab host)
-            ────────────────────────────────────────────────────── -->
+            <!-- Column 2 — Main content area -->
             <Grid Grid.Column="2"
-                  Background="{DynamicResource BackgroundPrimaryBrush}">
-
-                <!-- Each view is shown/hidden based on ActiveSection.
-                     Replaced with a proper ContentControl + DataTemplate
-                     approach once ViewModels per section are wired up. -->
-
-                <views:DashboardView
-                    IsVisible="{Binding IsDashboardActive}"/>
-
-                <views:FilesView
-                    IsVisible="{Binding IsFilesActive}"/>
-
-                <views:ActivityView
-                    IsVisible="{Binding IsActivityActive}"/>
-
-                <views:AccountsView IsVisible="{Binding IsAccountsActive}"/>
-
-                <views:SettingsView
-                    IsVisible="{Binding IsSettingsActive}"/>
-
+                Background="{DynamicResource BackgroundPrimaryBrush}">
+                <ContentControl Content="{Binding ActiveView}"/>
             </Grid>
 
         </Grid>
+        <!-- ── end Row 0 three-column grid ── -->
 
-        <!-- ═══════════════════════════════════════════════════════════
-             Row 1 — Status bar (spans full width)
-        ════════════════════════════════════════════════════════════ -->
+        <!-- ── Row 1 — Status bar ── -->
         <Border Grid.Row="1"
                 Background="{DynamicResource BackgroundStatusBarBrush}"
                 BorderThickness="0,1,0,0"
@@ -295,11 +234,11 @@
                 Height="{StaticResource StatusBarHeight}"
                 DataContext="{Binding StatusBar}">
             <TextBlock IsVisible="{Binding !HasAccount}"
-                    Text="No account selected"
-                    FontSize="{StaticResource FontSizeXs}"
-                    Foreground="{DynamicResource TextTertiaryBrush}"
-                    VerticalAlignment="Center"
-                    Margin="12,0"/>
+                       Text="No account selected"
+                       FontSize="{StaticResource FontSizeXs}"
+                       Foreground="{DynamicResource TextTertiaryBrush}"
+                       VerticalAlignment="Center"
+                       Margin="12,0"/>
         </Border>
 
     </Grid>

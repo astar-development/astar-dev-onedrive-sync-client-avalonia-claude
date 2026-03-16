@@ -139,7 +139,7 @@
                         Background="Transparent"
                         BorderBrush="{DynamicResource BorderDefaultBrush}"
                         BorderThickness="1"
-                        Command="{Binding Accounts.AddAccountCommand}">
+                        Command="{Binding AddAccountCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock Text="+"
                                    FontSize="{StaticResource FontSizeLg}"

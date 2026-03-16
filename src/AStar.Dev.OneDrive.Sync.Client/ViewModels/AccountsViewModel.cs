@@ -38,10 +38,8 @@ public sealed partial class AccountsViewModel : ObservableObject
 
     // ── Commands ──────────────────────────────────────────────────────────
 
-    [RelayCommand]
-    private void AddAccount()
+    public void AddAccount()
     {
-        System.Diagnostics.Debug.WriteLine("AddAccount command fired");
         var wizard = new AddAccountWizardViewModel();
         wizard.Completed  += OnWizardCompleted;
         wizard.Cancelled  += OnWizardCancelled;

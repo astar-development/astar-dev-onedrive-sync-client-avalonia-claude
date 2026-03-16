@@ -1,3 +1,4 @@
+using AStar.Dev.OneDrive.Sync.Client.Views;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -8,6 +9,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // ── Navigation ────────────────────────────────────────────────────────
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActiveView))]  // add to the existing list on _activeSection
     [NotifyPropertyChangedFor(nameof(IsDashboardActive))]
     [NotifyPropertyChangedFor(nameof(IsFilesActive))]
     [NotifyPropertyChangedFor(nameof(IsActivityActive))]
@@ -32,11 +34,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // ── Construction ──────────────────────────────────────────────────────
 
     [RelayCommand]
-    private void AddAccount() => Accounts.AddAccountCommand.Execute(null);
-    
+    private void AddAccount()
+    {
+        //Accounts.AddAccountCommand.Execute(null);
+
+    ActiveSection = NavSection.Accounts;
+    Accounts.AddAccount();
+    }
+
     public MainWindowViewModel()
     {
-        System.Diagnostics.Debug.WriteLine($"Accounts1 is null: {Accounts is null}");
         Accounts.AccountSelected += OnAccountSelected;
         Accounts.AccountSelected += OnAccountSelected;
         Accounts.PropertyChanged += (_, e) =>
@@ -45,7 +52,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 SyncStatusBarToActiveAccount();
         };
     }
+    public object? ActiveView => ActiveSection switch
+    {
+        NavSection.Dashboard => _dashboardView ??= new DashboardView(),
+        NavSection.Files     => _filesView     ??= new FilesView(),
+        NavSection.Activity  => _activityView  ??= new ActivityView(),
+        NavSection.Accounts  => _accountsView  ??= new AccountsView(),
+        NavSection.Settings  => _settingsView  ??= new SettingsView(),
+        _                    => null
+    };
 
+    private DashboardView? _dashboardView;
+    private FilesView?     _filesView;
+    private ActivityView?  _activityView;
+    private AccountsView?  _accountsView;
+    private SettingsView?  _settingsView;
     // ── Private helpers ───────────────────────────────────────────────────
 
     private void OnAccountSelected(object? sender, AccountCardViewModel card)
