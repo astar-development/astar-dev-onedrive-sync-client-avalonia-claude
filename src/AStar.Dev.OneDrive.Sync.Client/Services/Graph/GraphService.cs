@@ -155,9 +155,8 @@ public sealed class GraphService : IGraphService
     private static GraphServiceClient BuildClient(string accessToken) =>
         new(new BaseBearerTokenAuthenticationProvider(
             new StaticAccessTokenProvider(accessToken)));
+    private sealed record DriveContext(string DriveId, string RootId);
 }
-
-file sealed record DriveContext(string DriveId, string RootId);
 
 file sealed class StaticAccessTokenProvider(string token) : IAccessTokenProvider
 {
