@@ -1,0 +1,19 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace AStar.Dev.OneDrive.Sync.Client.Data.Entities;
+
+public sealed class AccountEntity
+{
+    [Key]
+    public string Id          { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string Email       { get; set; } = string.Empty;
+    public int    AccentIndex { get; set; }
+    public bool   IsActive    { get; set; }
+    public string? DeltaLink  { get; set; }
+    public DateTimeOffset? LastSyncedAt { get; set; }
+    public long   QuotaTotal  { get; set; }
+    public long   QuotaUsed   { get; set; }
+
+    public List<SyncFolderEntity> SyncFolders { get; set; } = [];
+}

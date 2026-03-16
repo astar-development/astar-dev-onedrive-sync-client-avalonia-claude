@@ -1,11 +1,17 @@
+using System.Threading.Tasks;
 using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
+using AStar.Dev.OneDrive.Sync.Client.Services.Graph;
+using AStar.Dev.OneDrive.Sync.Client.Services.Startup;
 using AStar.Dev.OneDrive.Sync.Client.Views;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace AStar.Dev.OneDrive.Sync.Client.ViewModels;
 
-public sealed partial class MainWindowViewModel : ObservableObject
+public sealed partial class MainWindowViewModel(
+    IAuthService    authService,
+    IGraphService   graphService,
+    IStartupService startupService) : ObservableObject
 {
     // ── Navigation ────────────────────────────────────────────────────────
 
@@ -27,7 +33,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void Navigate(NavSection section) => ActiveSection = section;
 
-    // ── Active view (lazy-loaded, one instance per section) ───────────────
+    // ── Active view ───────────────────────────────────────────────────────
 
     public object? ActiveView => ActiveSection switch
     {
@@ -47,14 +53,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     // ── Child view models ─────────────────────────────────────────────────
 
-    public AccountsViewModel  Accounts  { get; }
+    public AccountsViewModel  Accounts  { get; } = new(authService, graphService,
+        // repository injected via App — resolved at construction time
+        App.Repository);
+
     public StatusBarViewModel StatusBar { get; } = new();
 
-    // ── Construction ──────────────────────────────────────────────────────
+    // ── Startup ───────────────────────────────────────────────────────────
 
-    public MainWindowViewModel(IAuthService authService)
+    /// <summary>
+    /// Called once from MainWindow after DataContext is set.
+    /// Restores persisted accounts without blocking the UI thread.
+    /// </summary>
+    public async Task InitialiseAsync()
     {
-        Accounts = new AccountsViewModel(authService);
+        var restored = await startupService.RestoreAccountsAsync();
+        Accounts.RestoreAccounts(restored);
+        SyncStatusBarToActiveAccount();
+
         Accounts.AccountSelected += OnAccountSelected;
         Accounts.PropertyChanged += (_, e) =>
         {

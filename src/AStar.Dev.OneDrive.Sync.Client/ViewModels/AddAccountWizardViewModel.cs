@@ -1,5 +1,6 @@
 using AStar.Dev.OneDrive.Sync.Client.Models;
 using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
+using AStar.Dev.OneDrive.Sync.Client.Services.Graph;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System;
@@ -12,29 +13,20 @@ namespace AStar.Dev.OneDrive.Sync.Client.ViewModels;
 
 public enum WizardStep { SignIn, SelectFolders, Confirm }
 
-/// <summary>
-/// Stub folder item shown in the wizard folder-selection step.
-/// Replaced with real Graph API data when the Graph service is wired up.
-/// </summary>
-public sealed partial class WizardFolderItem : ObservableObject
+public sealed partial class WizardFolderItem(string id, string name) : ObservableObject
 {
-    public string Id   { get; init; } = string.Empty;
-    public string Name { get; init; } = string.Empty;
+    public string Id   { get; } = id;
+    public string Name { get; } = name;
 
     [ObservableProperty] private bool _isSelected = true;
 }
 
-/// <summary>
-/// Drives the Add Account wizard — a three-step flow:
-///   Step 1 — Sign in (real MSAL browser launch)
-///   Step 2 — Select folders to sync (skippable)
-///   Step 3 — Confirm and finish
-/// </summary>
-public sealed partial class AddAccountWizardViewModel(IAuthService authService) : ObservableObject
+public sealed partial class AddAccountWizardViewModel(
+    IAuthService  authService,
+    IGraphService graphService) : ObservableObject
 {
-    private readonly IAuthService _authService = authService;
-    private          string       _accountId   = string.Empty;
-    private          string?      _accessToken;
+    private string  _accountId   = string.Empty;
+    private string? _accessToken;
     private CancellationTokenSource? _authCts;
 
     // ── Step state ────────────────────────────────────────────────────────
@@ -59,14 +51,15 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
     private bool _isSignedIn;
 
     [ObservableProperty] private bool   _isWaitingForAuth;
-    [ObservableProperty] private string _signInStatusText  = string.Empty;
+    [ObservableProperty] private string _signInStatusText = string.Empty;
     [ObservableProperty] private bool   _signInHasError;
 
     // ── Folder selection step ─────────────────────────────────────────────
 
     public ObservableCollection<WizardFolderItem> Folders { get; } = [];
 
-    [ObservableProperty] private bool _isLoadingFolders;
+    [ObservableProperty] private bool   _isLoadingFolders;
+    [ObservableProperty] private string _folderLoadError = string.Empty;
 
     // ── Confirm step ──────────────────────────────────────────────────────
 
@@ -95,21 +88,23 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
     }
 
     [RelayCommand(CanExecute = nameof(CanGoNext))]
-    private void Next()
+    private async Task NextAsync()
     {
-        if (CurrentStep == WizardStep.SignIn)
+        switch (CurrentStep)
         {
-            LoadStubFolders();
-            CurrentStep = WizardStep.SelectFolders;
-        }
-        else if (CurrentStep == WizardStep.SelectFolders)
-        {
-            BuildConfirmSummary();
-            CurrentStep = WizardStep.Confirm;
-        }
-        else if (CurrentStep == WizardStep.Confirm)
-        {
-            Finish();
+            case WizardStep.SignIn:
+                await LoadFoldersAsync();
+                CurrentStep = WizardStep.SelectFolders;
+                break;
+
+            case WizardStep.SelectFolders:
+                BuildConfirmSummary();
+                CurrentStep = WizardStep.Confirm;
+                break;
+
+            case WizardStep.Confirm:
+                Finish();
+                break;
         }
     }
 
@@ -128,15 +123,15 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
     {
         if (IsWaitingForAuth) return;
 
-        SignInHasError    = false;
-        SignInStatusText  = "Waiting for sign-in\u2026";
-        IsWaitingForAuth  = true;
+        SignInHasError   = false;
+        SignInStatusText = "Waiting for sign-in\u2026";
+        IsWaitingForAuth = true;
 
         _authCts = new CancellationTokenSource();
 
         try
         {
-            var result = await _authService.SignInInteractiveAsync(_authCts.Token);
+            var result = await authService.SignInInteractiveAsync(_authCts.Token);
 
             if (result.IsCancelled)
             {
@@ -150,7 +145,6 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
             }
             else
             {
-                // Success
                 _accountId           = result.AccountId!;
                 _accessToken         = result.AccessToken;
                 ConfirmedDisplayName = result.DisplayName ?? string.Empty;
@@ -158,7 +152,6 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
                 IsSignedIn           = true;
                 SignInStatusText     = $"Signed in as {ConfirmedEmail}";
                 SignInHasError       = false;
-
                 NextCommand.NotifyCanExecuteChanged();
             }
         }
@@ -176,9 +169,8 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
     public event EventHandler?                  Cancelled;
 
     [RelayCommand]
-    private async Task Cancel()
+    private async Task CancelAsync()
     {
-        // Cancel any in-progress auth
         _authCts?.Cancel();
         await Task.CompletedTask;
         Cancelled?.Invoke(this, EventArgs.Empty);
@@ -186,25 +178,37 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
 
     // ── Private helpers ───────────────────────────────────────────────────
 
-    private void LoadStubFolders()
+    private async Task LoadFoldersAsync()
     {
+        if (_accessToken is null) return;
+
+        IsLoadingFolders = true;
+        FolderLoadError  = string.Empty;
         Folders.Clear();
-        // Stub folders — replaced with real Graph /me/drive/root/children in step 5
-        foreach (var name in new[] { "Documents", "Photos", "Desktop", "Music", "Videos" })
+
+        try
         {
-            Folders.Add(new WizardFolderItem
-            {
-                Id         = Guid.NewGuid().ToString(),
-                Name       = name,
-                IsSelected = name is "Documents" or "Desktop"
-            });
+            var driveFolders = await graphService
+                .GetRootFoldersAsync(_accessToken);
+
+            foreach (var f in driveFolders)
+                Folders.Add(new WizardFolderItem(f.Id, f.Name)
+                {
+                    IsSelected = f.Name is "Documents" or "Desktop"
+                });
+        }
+        catch (Exception ex)
+        {
+            FolderLoadError = $"Could not load folders: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingFolders = false;
         }
     }
 
-    private void BuildConfirmSummary()
-    {
+    private void BuildConfirmSummary() =>
         ConfirmedFolderCount = Folders.Count(f => f.IsSelected);
-    }
 
     private void Finish()
     {
