@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
@@ -6,7 +7,6 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
-using System.Linq;
 
 namespace AStar.Dev.OneDrive.Sync.Client.Services;
 
@@ -86,16 +86,16 @@ public sealed class ThemeService : IThemeService, IDisposable
         if (app is null) return;
 
         var targetUri = resolved == AppTheme.Dark ? DarkUri : LightUri;
-        var resources = app.Resources.MergedDictionaries;
+        var merged = app.Resources.MergedDictionaries;
 
-        var existing = resources
+        var existing = merged
             .OfType<ResourceInclude>()
             .FirstOrDefault(r => r.Source == LightUri || r.Source == DarkUri);
 
         if (existing is not null)
-            resources.Remove(existing);
+            merged.Remove(existing);
 
-        resources.Add(new ResourceInclude(targetUri) { Source = targetUri });
+        merged.Add(new ResourceInclude(targetUri) { Source = targetUri });
     }
 
     public void Dispose() => _systemWatcher?.Dispose();

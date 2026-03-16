@@ -1,13 +1,8 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Data.Core;
-using Avalonia.Data.Core.Plugins;
-using System.Linq;
 using Avalonia.Markup.Xaml;
-using AStar.Dev.OneDrive.Sync.Client.ViewModels;
-using AStar.Dev.OneDrive.Sync.Client.Views;
-using AStar.Dev.OneDrive.Sync.Client.Services.Localization;
 using AStar.Dev.OneDrive.Sync.Client.Services;
+using AStar.Dev.OneDrive.Sync.Client.Services.Localization;
 using System.Globalization;
 
 namespace AStar.Dev.OneDrive.Sync.Client;

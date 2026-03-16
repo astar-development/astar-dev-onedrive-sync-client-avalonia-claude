@@ -1,4 +1,4 @@
-namespace AStar.Dev.OneDrive.Sync.Client.ViewModels;
+namespace AStar.Dev.OneDrive.Sync.Client;
 
 /// <summary>
 /// Represents the top-level navigation sections shown in the icon rail.

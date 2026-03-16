@@ -7,7 +7,7 @@
         xmlns:views="clr-namespace:AStar.Dev.OneDrive.Sync.Client.Views"
         xmlns:local="clr-namespace:AStar.Dev.OneDrive.Sync.Client"
         mc:Ignorable="d"
-        x:Class="AStar.Dev.OneDrive.Sync.Client.Views.MainWindow"
+        x:Class="AStar.Dev.OneDrive.Sync.Client.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="OneDrive Sync"
         Width="1100" Height="700"
@@ -289,8 +289,20 @@
         <!-- ═══════════════════════════════════════════════════════════
              Row 1 — Status bar (spans full width)
         ════════════════════════════════════════════════════════════ -->
-        <controls:AppStatusBar Grid.Row="1"
-                            DataContext="{Binding StatusBar}"/>
+        <!-- Row 1 — Status bar (spans full width) -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource BackgroundStatusBarBrush}"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                Height="{StaticResource StatusBarHeight}"
+                DataContext="{Binding StatusBar}">
+            <TextBlock IsVisible="{Binding !HasAccount}"
+                    Text="No account selected"
+                    FontSize="{StaticResource FontSizeXs}"
+                    Foreground="{DynamicResource TextTertiaryBrush}"
+                    VerticalAlignment="Center"
+                    Margin="12,0"/>
+        </Border>
 
     </Grid>
 

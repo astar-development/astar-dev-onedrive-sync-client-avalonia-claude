@@ -1,4 +1,3 @@
-using AStar.Dev.OneDrive.Sync.Client;  // for NavSection
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
