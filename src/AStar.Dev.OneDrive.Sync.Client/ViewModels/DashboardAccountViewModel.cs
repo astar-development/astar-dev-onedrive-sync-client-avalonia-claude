@@ -1,5 +1,6 @@
 using AStar.Dev.OneDrive.Sync.Client.Models;
 using AStar.Dev.OneDrive.Sync.Client.Services.Sync;
+using AStar.Dev.Utilities;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -30,7 +31,7 @@ public sealed partial class DashboardAccountViewModel : ObservableObject
         : 0;
 
     public string StorageText => QuotaTotal > 0
-        ? $"{FormatBytes(QuotaUsed)} / {FormatBytes(QuotaTotal)}"
+        ? $"{QuotaUsed.FileSizeToText()} / {QuotaTotal.FileSizeToText()}"
         : "Unknown";
 
     // ── Sync state ────────────────────────────────────────────────────────
@@ -133,13 +134,4 @@ public sealed partial class DashboardAccountViewModel : ObservableObject
                 { TotalDays:    < 2   }    => "Yesterday",
                 var td                     => $"{(int)td.TotalDays}d ago"
             };
-
-    private static string FormatBytes(long bytes) => bytes switch
-    {
-        0                    => "0 B",
-        < 1024               => $"{bytes} B",
-        < 1024 * 1024        => $"{bytes / 1024.0:F1} KB",
-        < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
-        _                    => $"{bytes / (1024.0 * 1024 * 1024):F1} GB"
-    };
 }

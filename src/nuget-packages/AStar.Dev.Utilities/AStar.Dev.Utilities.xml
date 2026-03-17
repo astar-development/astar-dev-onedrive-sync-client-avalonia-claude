@@ -292,6 +292,13 @@
             <param name="path">The file path to normalize</param>
             <returns>The normalized file path, prefixed with a backslash if not already prefixed</returns>
         </member>
+        <member name="M:AStar.Dev.Utilities.StringExtensions.FileSizeText(System.Int64)">
+            <summary>
+               The FileSizeText method converts a file size in bytes to a human-readable string format (B, KB, MB).
+            </summary>
+            <param name="fileSize">The file size in bytes (represented as a long integer)</param>
+            <returns>The human-readable string format</returns>
+        </member>
         <member name="T:System.Text.RegularExpressions.Generated.LowercaseLettersRegex_0">
             <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the LowercaseLettersRegex method.</summary>
         </member>

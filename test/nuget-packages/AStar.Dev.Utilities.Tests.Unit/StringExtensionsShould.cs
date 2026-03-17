@@ -82,4 +82,16 @@ public sealed class StringExtensionsShould
     [InlineData("no-trailing", ".ext", "no-trailing")] // no change when not ending with token
     [InlineData("value", "", "value")] // empty token -> no change
     public void ContainTheRemoveTrailingMethodWhichReturnsTheExpectedResult(string input, string token, string expected) => input.RemoveTrailing(token).ShouldBe(expected);
+
+    [Theory]
+    [InlineData(1, "1 B")]
+    [InlineData(1024, "1.0 KB")]
+    [InlineData(1024 * 1024, "1.0 MB")]
+    [InlineData(1024 * 1024 * 1024, "1024.0 MB")]
+    [InlineData(0, "")]
+    [InlineData(512, "512 B")]
+    [InlineData(1536, "1.5 KB")]
+    [InlineData(5 * 1024 * 1024, "5.0 MB")]
+    [InlineData(5 * 1024 * 1024 + 512 * 1024 * 1024, "517.0 MB")]
+    public void ConvertTheFileSizeToHumanReadableFormat(long fileSizeToConvert, string expected) => fileSizeToConvert.FileSizeToText().ShouldBe(expected);
 }
