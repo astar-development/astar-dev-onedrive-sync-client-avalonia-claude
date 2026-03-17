@@ -2,18 +2,16 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using AStar.Dev.OneDrive.Sync.Client.Services;
-using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
 using AStar.Dev.OneDrive.Sync.Client.Services.Localization;
-using AStar.Dev.OneDrive.Sync.Client.Views;
 using System.Globalization;
 
 namespace AStar.Dev.OneDrive.Sync.Client;
 
 public partial class App : Application
 {
+    // ── Service singletons (replaced with a proper DI container in a later step) ──
     public static ILocalizationService Localisation { get; private set; } = null!;
     public static IThemeService        Theme        { get; private set; } = null!;
-    public static IAuthService         Auth         { get; private set; } = null!;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -26,18 +24,13 @@ public partial class App : Application
 
         // ── Theme ────────────────────────────────────────────────────────
         var themeService = new ThemeService();
-        themeService.Apply(AppTheme.System);
+        themeService.Apply(AppTheme.System); // System default; user can change in Settings
         Theme = themeService;
-
-        // ── Auth ─────────────────────────────────────────────────────────
-        var tokenCache  = new TokenCacheService();
-        var authService = new AuthService(tokenCache);
-        Auth = authService;
 
         // ── Main window ──────────────────────────────────────────────────
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow(authService);
+            desktop.MainWindow = new MainWindow();
         }
 
         base.OnFrameworkInitializationCompleted();

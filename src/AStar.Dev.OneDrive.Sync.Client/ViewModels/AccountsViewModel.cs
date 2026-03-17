@@ -1,18 +1,18 @@
 using AStar.Dev.OneDrive.Sync.Client.Models;
-using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace AStar.Dev.OneDrive.Sync.Client.ViewModels;
 
-public sealed partial class AccountsViewModel(IAuthService authService) : ObservableObject
+/// <summary>
+/// Drives the Accounts section view and the left-hand account panel.
+/// Owns the canonical list of connected accounts.
+/// </summary>
+public sealed partial class AccountsViewModel : ObservableObject
 {
-    private readonly IAuthService _authService = authService;
-
     // ── Account list ──────────────────────────────────────────────────────
 
     public ObservableCollection<AccountCardViewModel> Accounts { get; } = [];
@@ -31,32 +31,35 @@ public sealed partial class AccountsViewModel(IAuthService authService) : Observ
 
     public bool IsWizardVisible => Wizard is not null;
 
-    // ── Events ────────────────────────────────────────────────────────────
+    // ── Events (consumed by MainWindowViewModel to drive navigation) ──────
 
+    /// <summary>Raised when the user clicks an account card — navigate to Files.</summary>
     public event EventHandler<AccountCardViewModel>? AccountSelected;
 
     // ── Commands ──────────────────────────────────────────────────────────
 
     public void AddAccount()
     {
-        var wizard = new AddAccountWizardViewModel(_authService);
-        wizard.Completed += OnWizardCompleted;
-        wizard.Cancelled += OnWizardCancelled;
+        var wizard = new AddAccountWizardViewModel();
+        wizard.Completed  += OnWizardCompleted;
+        wizard.Cancelled  += OnWizardCancelled;
         Wizard = wizard;
     }
 
     [RelayCommand]
-    private async Task RemoveAccountAsync(AccountCardViewModel card)
+    private void RemoveAccount(AccountCardViewModel card)
     {
-        // Sign out from MSAL cache
-        await _authService.SignOutAsync(card.Id);
-
         Accounts.Remove(card);
-
         if (ActiveAccount == card)
             ActiveAccount = Accounts.FirstOrDefault();
-
         OnPropertyChanged(nameof(HasAccounts));
+    }
+
+    // ── Initialisation (stub data for now) ────────────────────────────────
+
+    public AccountsViewModel()
+    {
+        // No stub accounts — start empty so the user goes through the wizard
     }
 
     // ── Private helpers ───────────────────────────────────────────────────
@@ -66,7 +69,7 @@ public sealed partial class AccountsViewModel(IAuthService authService) : Observ
         CloseWizard();
 
         account.AccentIndex = Accounts.Count % 6;
-        account.IsActive    = Accounts.Count == 0;
+        account.IsActive    = Accounts.Count == 0; // first account is active by default
 
         var card = new AccountCardViewModel(account);
         card.Selected        += OnCardSelected;
@@ -93,6 +96,7 @@ public sealed partial class AccountsViewModel(IAuthService authService) : Observ
 
     private void OnCardSelected(object? sender, AccountCardViewModel card)
     {
+        // Update active state on all cards
         foreach (var c in Accounts)
             c.IsActive = c == card;
 

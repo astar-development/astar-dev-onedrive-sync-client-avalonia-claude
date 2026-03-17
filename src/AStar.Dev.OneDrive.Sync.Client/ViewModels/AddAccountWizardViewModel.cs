@@ -1,11 +1,9 @@
 using AStar.Dev.OneDrive.Sync.Client.Models;
-using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace AStar.Dev.OneDrive.Sync.Client.ViewModels;
@@ -26,17 +24,12 @@ public sealed partial class WizardFolderItem : ObservableObject
 
 /// <summary>
 /// Drives the Add Account wizard — a three-step flow:
-///   Step 1 — Sign in (real MSAL browser launch)
+///   Step 1 — Sign in (MSAL browser launch, wired up in a later step)
 ///   Step 2 — Select folders to sync (skippable)
 ///   Step 3 — Confirm and finish
 /// </summary>
-public sealed partial class AddAccountWizardViewModel(IAuthService authService) : ObservableObject
+public sealed partial class AddAccountWizardViewModel : ObservableObject
 {
-    private readonly IAuthService _authService = authService;
-    private          string       _accountId   = string.Empty;
-    private          string?      _accessToken;
-    private CancellationTokenSource? _authCts;
-
     // ── Step state ────────────────────────────────────────────────────────
 
     [ObservableProperty]
@@ -59,8 +52,7 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
     private bool _isSignedIn;
 
     [ObservableProperty] private bool   _isWaitingForAuth;
-    [ObservableProperty] private string _signInStatusText  = string.Empty;
-    [ObservableProperty] private bool   _signInHasError;
+    [ObservableProperty] private string _signInStatusText = string.Empty;
 
     // ── Folder selection step ─────────────────────────────────────────────
 
@@ -79,10 +71,10 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
     public bool CanGoBack => CurrentStep != WizardStep.SignIn;
     public bool CanGoNext => CurrentStep switch
     {
-        WizardStep.SignIn        => IsSignedIn,
-        WizardStep.SelectFolders => true,
-        WizardStep.Confirm       => true,
-        _                        => false
+        WizardStep.SignIn         => IsSignedIn,
+        WizardStep.SelectFolders  => true,   // skippable
+        WizardStep.Confirm        => true,
+        _                         => false
     };
 
     public string NextLabel => CurrentStep == WizardStep.Confirm ? "Finish" : "Next";
@@ -116,80 +108,49 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
     [RelayCommand]
     private void SkipFolders()
     {
+        // Deselect all then advance
         foreach (var f in Folders) f.IsSelected = false;
         BuildConfirmSummary();
         CurrentStep = WizardStep.Confirm;
     }
 
-    // ── Sign-in ───────────────────────────────────────────────────────────
+    // ── Sign-in (stub — MSAL wired in a later step) ───────────────────────
 
     [RelayCommand]
     private async Task OpenBrowserAsync()
     {
-        if (IsWaitingForAuth) return;
+        IsWaitingForAuth = true;
+        SignInStatusText = "Waiting for sign-in\u2026";
 
-        SignInHasError    = false;
-        SignInStatusText  = "Waiting for sign-in\u2026";
-        IsWaitingForAuth  = true;
+        // Stub: simulate auth delay — replaced with real MSAL call later
+        await Task.Delay(1500);
 
-        _authCts = new CancellationTokenSource();
+        IsSignedIn           = true;
+        IsWaitingForAuth     = false;
+        SignInStatusText     = "Signed in successfully";
+        ConfirmedDisplayName = "Demo User";
+        ConfirmedEmail       = "demo@outlook.com";
 
-        try
-        {
-            var result = await _authService.SignInInteractiveAsync(_authCts.Token);
-
-            if (result.IsCancelled)
-            {
-                SignInStatusText = "Sign-in cancelled.";
-                SignInHasError   = false;
-            }
-            else if (result.IsError)
-            {
-                SignInStatusText = result.ErrorMessage ?? "Sign-in failed.";
-                SignInHasError   = true;
-            }
-            else
-            {
-                // Success
-                _accountId           = result.AccountId!;
-                _accessToken         = result.AccessToken;
-                ConfirmedDisplayName = result.DisplayName ?? string.Empty;
-                ConfirmedEmail       = result.Email       ?? string.Empty;
-                IsSignedIn           = true;
-                SignInStatusText     = $"Signed in as {ConfirmedEmail}";
-                SignInHasError       = false;
-
-                NextCommand.NotifyCanExecuteChanged();
-            }
-        }
-        finally
-        {
-            IsWaitingForAuth = false;
-            _authCts.Dispose();
-            _authCts = null;
-        }
+        NextCommand.NotifyCanExecuteChanged();
     }
 
     // ── Events ────────────────────────────────────────────────────────────
 
+    /// <summary>Raised when the wizard completes successfully.</summary>
     public event EventHandler<OneDriveAccount>? Completed;
-    public event EventHandler?                  Cancelled;
+
+    /// <summary>Raised when the user cancels.</summary>
+    public event EventHandler? Cancelled;
 
     [RelayCommand]
-    private async Task Cancel()
-    {
-        // Cancel any in-progress auth
-        _authCts?.Cancel();
-        await Task.CompletedTask;
-        Cancelled?.Invoke(this, EventArgs.Empty);
-    }
+    private void Cancel() => Cancelled?.Invoke(this, EventArgs.Empty);
 
     // ── Private helpers ───────────────────────────────────────────────────
 
     private void LoadStubFolders()
     {
         Folders.Clear();
-        // Stub folders — replaced with real Graph /me/drive/root/children in step 5
+        // Stub folders — replaced with real Graph /me/drive/root/children call later
         foreach (var name in new[] { "Documents", "Photos", "Desktop", "Music", "Videos" })
         {
             Folders.Add(new WizardFolderItem
@@ -210,12 +171,12 @@ public sealed partial class AddAccountWizardViewModel(IAuthService authService) 
     {
         var account = new OneDriveAccount
         {
-            Id                = _accountId,
             DisplayName       = ConfirmedDisplayName,
             Email             = ConfirmedEmail,
-            SelectedFolderIds = [.. Folders
+            SelectedFolderIds = Folders
                 .Where(f => f.IsSelected)
-                .Select(f => f.Id)]
+                .Select(f => f.Id)
+                .ToList()
         };
 
         Completed?.Invoke(this, account);
