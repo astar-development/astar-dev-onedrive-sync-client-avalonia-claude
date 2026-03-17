@@ -72,11 +72,9 @@ jobs:
 
           echo "SOLUTION_FILE=$pascal" >> $GITHUB_ENV
 
-      - name: PASCAL_REPO_NAME
-        run: echo ${{ env.PASCAL_REPO_NAME }}
-
-      - name: SOLUTION_FILE
-        run: echo ${{ env.SOLUTION_FILE }}
+      - name: ls
+        run: |
+          ls
 
       - name: Restore ${{ env.PASCAL_REPO_NAME }}
         run: dotnet restore ${{ env.PASCAL_REPO_NAME }}
