@@ -1,0 +1,200 @@
+name: Build the File App
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SONAR_PROJECT: ${{ github.event.repository.name }}
+  PASCAL_REPO_NAME: Will.Be.Set.By.Step
+  SOLUTION_FILE: Will.Be.Set.slnx
+  CONFIGURATION: Release
+  DOTNET_CORE_VERSION: 10.0.100
+  WORKING_DIRECTORY: src/
+
+jobs:
+  test:
+    name: Run tests (matrix)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_CORE_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+              
+      - name: PascalCase repo name with rules
+        run: |
+          raw="${{ github.event.repository.name }}"
+
+          # Split on '-' and PascalCase each segment, rejoin with '.'
+          pascal=$(echo "$raw" | awk -F'-' '{
+            OFS="."
+            for (i=1; i<=NF; i++) {
+              $i = toupper(substr($i,1,1)) substr($i,2)
+            }
+            print
+          }')
+
+          # Adjust leading Astar → AStar
+          pascal=$(echo "$pascal" | sed 's/^Astar/AStar/')
+
+          # Add suffix
+          pascal="${pascal}.slnx"
+
+          echo "PASCAL_REPO_NAME=$pascal" >> $GITHUB_ENV
+
+          echo "SOLUTION_FILE=$pascal" >> $GITHUB_ENV
+
+      - name: PASCAL_REPO_NAME
+        run: echo ${{ env.PASCAL_REPO_NAME }}
+
+      - name: SOLUTION_FILE
+        run: echo ${{ env.SOLUTION_FILE }}
+
+      - name: Restore ${{ env.PASCAL_REPO_NAME }}
+        run: dotnet restore ${{ env.PASCAL_REPO_NAME }}
+
+      - name: Build solution
+        run: dotnet build ${{ env.SOLUTION_FILE }} --configuration Release
+
+      - run: echo "REPO_NAME=${{ github.event.repository.name }}" >> $GITHUB_ENV
+
+      - name: Run unit tests and collect coverage (XPlat)
+        run: |
+          dotnet test --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory TestResults --filter "FullyQualifiedName!~Integration&FullyQualifiedName!~EndToEnd" ${{ env.SOLUTION_FILE }}.slnx
+
+      - name: Upload TestResults artifact (contains coverage)
+        if: success() || failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: testruns-${{ matrix.os }}
+          path: TestResults
+          retention-days: 30
+
+  sonar:
+    name: SonarCloud analysis and coverage
+    needs: [test, coverage-aggregate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_CORE_VERSION }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: "zulu"
+
+      - name: 🛠 Cache SonarQube Cloud scanner
+        id: cache-sonar-scanner
+        uses: actions/cache@v5.2.3
+        with:
+          path: ./.sonar/scanner
+          key: ${{ runner.os }}-sonar-scanner
+          restore-keys: ${{ runner.os }}-sonar-scanner
+
+      - name: 🛠 Install SonarQube Cloud scanner
+        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ./.sonar/scanner
+          dotnet tool update dotnet-sonarscanner --tool-path ./.sonar/scanner
+
+      - name: Download merged coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-merged
+          path: ./coverage-merged
+
+      - name: Run SonarCloud analysis using merged Opencover
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          ./.sonar/scanner/dotnet-sonarscanner begin /k:"astar-development_${{ env.SONAR_PROJECT }}" /o:"astar-development" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage-merged/Opencover.xml /d:sonar.scanner.scanAll=false
+          dotnet build --configuration Release
+          ./.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+
+  build:
+    needs: [test]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Install .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_CORE_VERSION }}
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Build solution
+        run: dotnet build --configuration Release
+
+  coverage-aggregate:
+    name: Aggregate coverage reports
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Install ReportGenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool || true
+
+      - name: Merge reports and generate HTML + Cobertura + OpenCover
+        run: |
+          reportgenerator -reports:"artifacts/**/coverage.cobertura.xml" -targetdir:coverage-merged -reporttypes:"Html;Cobertura;Opencover"
+
+      - name: Upload merged coverage
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-merged
+          path: coverage-merged
+          retention-days: 30
