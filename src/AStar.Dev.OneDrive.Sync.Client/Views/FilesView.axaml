@@ -95,7 +95,7 @@
                                              Width="200" Height="2"
                                              Foreground="{DynamicResource TextAccentBrush}"
                                              Background="Transparent"/>
-                                <TextBlock Text="Loading folders\u2026"
+                                <TextBlock Text="Loading folders ..."
                                            FontSize="{StaticResource FontSizeSm}"
                                            Foreground="{DynamicResource TextTertiaryBrush}"
                                            HorizontalAlignment="Center"/>

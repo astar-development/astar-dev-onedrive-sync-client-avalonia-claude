@@ -121,7 +121,7 @@ public static class StringExtensions
     /// <returns>The normalized file path, prefixed with a forward slash if not already prefixed</returns>
     public static string NormalizeLinux(this string path)
     {
-        if(string.IsNullOrWhiteSpace(path))
+        if (string.IsNullOrWhiteSpace(path))
             return "/";
 
         path = path.Trim()
@@ -138,7 +138,7 @@ public static class StringExtensions
     /// <returns>The normalized file path, prefixed with a backslash if not already prefixed</returns>
     public static string NormalizeWindows(this string path)
     {
-        if(string.IsNullOrWhiteSpace(path))
+        if (string.IsNullOrWhiteSpace(path))
             return "\\";
 
         path = path.Trim()
@@ -147,4 +147,17 @@ public static class StringExtensions
 
         return path.StartsWith('\\') ? path : "\\" + path;
     }
+
+    /// <summary>
+    ///    The FileSizeText method converts a file size in bytes to a human-readable string format (B, KB, MB).
+    /// </summary>
+    /// <param name="fileSize">The file size in bytes (represented as a long integer)</param>
+    /// <returns>The human-readable string format</returns>
+    public static string FileSizeToText(this long fileSize) => fileSize switch
+    {
+        0 => string.Empty,
+        < 1024 => $"{fileSize} B",
+        < 1024 * 1024 => $"{fileSize / 1024.0:F1} KB",
+        _ => $"{fileSize / (1024.0 * 1024):F1} MB"
+    };
 }

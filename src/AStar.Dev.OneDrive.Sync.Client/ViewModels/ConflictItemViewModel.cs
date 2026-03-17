@@ -1,5 +1,6 @@
 using AStar.Dev.OneDrive.Sync.Client.Models;
 using AStar.Dev.OneDrive.Sync.Client.Services.Sync;
+using AStar.Dev.Utilities;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -23,8 +24,8 @@ public sealed partial class ConflictItemViewModel(
 
     public string LocalModifiedText  => FormatDateTime(conflict.LocalModified);
     public string RemoteModifiedText => FormatDateTime(conflict.RemoteModified);
-    public string LocalSizeText      => FormatSize(conflict.LocalSize);
-    public string RemoteSizeText     => FormatSize(conflict.RemoteSize);
+    public string LocalSizeText      => conflict.LocalSize.FileSizeToText();
+    public string RemoteSizeText     => conflict.RemoteSize.FileSizeToText();
 
     // ── Resolution panel state ────────────────────────────────────────────
 
@@ -87,14 +88,6 @@ public sealed partial class ConflictItemViewModel(
 
     private static string FormatDateTime(DateTimeOffset dt) =>
         dt.LocalDateTime.ToString("dd MMM yyyy HH:mm");
-
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        0             => "—",
-        < 1024        => $"{bytes} B",
-        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
-        _             => $"{bytes / (1024.0 * 1024):F1} MB"
-    };
 }
 
 public sealed record ConflictPolicyOption(

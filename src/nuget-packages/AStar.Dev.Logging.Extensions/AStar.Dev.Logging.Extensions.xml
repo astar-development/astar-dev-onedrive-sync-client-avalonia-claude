@@ -21,23 +21,6 @@
         <member name="M:AStar.Dev.Logging.Extensions.AStarLogger`1.Log``1(Microsoft.Extensions.Logging.LogLevel,Microsoft.Extensions.Logging.EventId,``0,System.Exception,System.Func{``0,System.Exception,System.String})">
             <inheritdoc />
         </member>
-        <member name="T:AStar.Dev.Logging.Extensions.CloudRoleNameTelemetryInitializer">
-            <summary>
-                The <see cref="T:AStar.Dev.Logging.Extensions.CloudRoleNameTelemetryInitializer" /> class implements the <see cref="T:Microsoft.ApplicationInsights.Extensibility.ITelemetryInitializer" /> interface to add the Cloud Role Name to the Application Insights logging.
-            </summary>
-            <param name="roleOrApplicationName">The Role / Application Name to configure Application Insights with</param>
-            <param name="instrumentationKey">The Instrumentation Key to configure Application Insights with</param>
-        </member>
-        <member name="M:AStar.Dev.Logging.Extensions.CloudRoleNameTelemetryInitializer.#ctor(System.String,System.String)">
-            <summary>
-                The <see cref="T:AStar.Dev.Logging.Extensions.CloudRoleNameTelemetryInitializer" /> class implements the <see cref="T:Microsoft.ApplicationInsights.Extensibility.ITelemetryInitializer" /> interface to add the Cloud Role Name to the Application Insights logging.
-            </summary>
-            <param name="roleOrApplicationName">The Role / Application Name to configure Application Insights with</param>
-            <param name="instrumentationKey">The Instrumentation Key to configure Application Insights with</param>
-        </member>
-        <member name="M:AStar.Dev.Logging.Extensions.CloudRoleNameTelemetryInitializer.Initialize(Microsoft.ApplicationInsights.Channel.ITelemetry)">
-            <inheritdoc />
-        </member>
         <member name="T:AStar.Dev.Logging.Extensions.Configuration">
             <summary>
                 The <see cref="T:AStar.Dev.Logging.Extensions.Configuration" /> class is a container for any applicable constants to use during logging

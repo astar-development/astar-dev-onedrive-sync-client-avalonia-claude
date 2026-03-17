@@ -10,9 +10,7 @@ namespace AStar.Dev.OneDrive.Sync.Client.ViewModels;
 
 public enum ActivityTab { Log, Conflicts }
 
-public sealed partial class ActivityViewModel(
-    ISyncService    syncService,
-    ISyncRepository syncRepository) : ObservableObject
+public sealed partial class ActivityViewModel(ISyncService syncService, ISyncRepository syncRepository) : ObservableObject
 {
     private string? _activeAccountId;
     private string  _activeAccountEmail = string.Empty;
@@ -61,9 +59,7 @@ public sealed partial class ActivityViewModel(
     /// Called by MainWindowViewModel when the active account changes.
     /// Loads persisted conflicts for the account.
     /// </summary>
-    public async Task SetActiveAccountAsync(
-        string accountId,
-        string accountEmail)
+    public async Task SetActiveAccountAsync(string accountId, string accountEmail)
     {
         _activeAccountId    = accountId;
         _activeAccountEmail = accountEmail;

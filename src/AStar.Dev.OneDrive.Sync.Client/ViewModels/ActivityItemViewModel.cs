@@ -1,4 +1,5 @@
 using AStar.Dev.OneDrive.Sync.Client.Models;
+using AStar.Dev.Utilities;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AStar.Dev.OneDrive.Sync.Client.ViewModels;
@@ -54,18 +55,9 @@ public sealed partial class ActivityItemViewModel : ObservableObject
         }
     }
 
-    public string FileSizeText => FileSize switch
-    {
-        0             => string.Empty,
-        < 1024        => $"{FileSize} B",
-        < 1024 * 1024 => $"{FileSize / 1024.0:F1} KB",
-        _             => $"{FileSize / (1024.0 * 1024):F1} MB"
-    };
+    public string FileSizeText => FileSize.FileSizeToText();
 
-    public static ActivityItemViewModel FromJob(
-        SyncJob job,
-        string  accountEmail,
-        string  folderName) => new()
+    public static ActivityItemViewModel FromJob(SyncJob job, string  accountEmail, string  folderName) => new()
     {
         AccountId    = job.AccountId,
         AccountEmail = accountEmail,
@@ -84,10 +76,7 @@ public sealed partial class ActivityItemViewModel : ObservableObject
         ErrorMessage = job.ErrorMessage
     };
 
-    public static ActivityItemViewModel FromConflict(
-        SyncConflict conflict,
-        string       accountEmail,
-        string       folderName) => new()
+    public static ActivityItemViewModel FromConflict(SyncConflict conflict, string accountEmail, string folderName) => new()
     {
         AccountId    = conflict.AccountId,
         AccountEmail = accountEmail,
@@ -98,10 +87,7 @@ public sealed partial class ActivityItemViewModel : ObservableObject
         OccurredAt   = conflict.DetectedAt
     };
 
-    public static ActivityItemViewModel Error(
-        string accountId,
-        string accountEmail,
-        string message) => new()
+    public static ActivityItemViewModel Error(string accountId, string accountEmail, string message) => new()
     {
         AccountId    = accountId,
         AccountEmail = accountEmail,
