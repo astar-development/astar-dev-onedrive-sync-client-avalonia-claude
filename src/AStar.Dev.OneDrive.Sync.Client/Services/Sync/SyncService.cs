@@ -2,18 +2,19 @@ using AStar.Dev.OneDrive.Sync.Client.Data.Repositories;
 using AStar.Dev.OneDrive.Sync.Client.Models;
 using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
 using AStar.Dev.OneDrive.Sync.Client.Services.Graph;
+using Serilog;
 
 namespace AStar.Dev.OneDrive.Sync.Client.Services.Sync;
 
 public sealed class SyncService(
-    IAuthService       authService,
-    IGraphService      graphService,
+    IAuthService authService,
+    IGraphService graphService,
     IAccountRepository accountRepository,
-    ISyncRepository    syncRepository) : ISyncService
+    ISyncRepository syncRepository) : ISyncService
 {
     public event EventHandler<SyncProgressEventArgs>? SyncProgressChanged;
     public event EventHandler<JobCompletedEventArgs>? JobCompleted;
-    public event EventHandler<SyncConflict>?          ConflictDetected;
+    public event EventHandler<SyncConflict>? ConflictDetected;
 
     // ── ISyncService ──────────────────────────────────────────────────────
 
@@ -32,17 +33,18 @@ public sealed class SyncService(
 
         if (string.IsNullOrEmpty(account.LocalSyncPath))
         {
-            RaiseProgress(account.Id, string.Empty, 0, 0,
-                "No local sync path configured", isComplete: true);
+            RaiseProgress(account.Id, string.Empty, 0, 0, "No local sync path configured", isComplete: true);
 
             return;
         }
 
         foreach (var folderId in account.SelectedFolderIds)
         {
+            Log.Information("Starting sync for account {AccountId}, folder {FolderId}", account.Id, folderId);
             if (ct.IsCancellationRequested) break;
 
             await SyncFolderAsync(account, token, folderId, ct);
+            Log.Information("Finished sync for account {AccountId}, folder {FolderId}", account.Id, folderId);
         }
     }
 
@@ -63,24 +65,21 @@ public sealed class SyncService(
 
     private async Task SyncFolderAsync(OneDriveAccount account, string token, string folderId, CancellationToken ct)
     {
-        var entity       = await accountRepository.GetByIdAsync(account.Id);
+        var entity = await accountRepository.GetByIdAsync(account.Id);
         var folderEntity = entity?.SyncFolders.FirstOrDefault(f => f.FolderId == folderId);
 
         var deltaLink = folderEntity?.DeltaLink;
 
-        RaiseProgress(account.Id, folderId, 0, 0, "Fetching changes\u2026");
+        RaiseProgress(account.Id, folderId, 0, 0, "Fetching changes ...");
 
-        var delta = await graphService.GetDeltaAsync(
-            token, folderId, deltaLink, ct);
+        var delta = await graphService.GetDeltaAsync(token, folderId, deltaLink, ct);
 
         if (delta.Items.Count == 0)
         {
             if (delta.NextDeltaLink is not null)
-                await accountRepository.UpdateDeltaLinkAsync(
-                    account.Id, folderId, delta.NextDeltaLink);
+                await accountRepository.UpdateDeltaLinkAsync(account.Id, folderId, delta.NextDeltaLink);
 
-            RaiseProgress(account.Id, folderId, 0, 0,
-                "No changes", isComplete: true);
+            RaiseProgress(account.Id, folderId, 0, 0, "No changes", isComplete: true);
 
             return;
         }
@@ -123,19 +122,19 @@ public sealed class SyncService(
             if (item.IsFolder) continue;
 
             var relativePath = item.Name;
-            var localPath    = Path.Combine(account.LocalSyncPath, relativePath);
+            var localPath = Path.Combine(account.LocalSyncPath, relativePath);
 
             if (item.IsDeleted)
             {
                 if (File.Exists(localPath))
                     jobs.Add(new SyncJob
                     {
-                        AccountId      = account.Id,
-                        FolderId       = folderId,
-                        RemoteItemId   = item.Id,
-                        RelativePath   = relativePath,
-                        LocalPath      = localPath,
-                        Direction      = SyncDirection.Delete,
+                        AccountId = account.Id,
+                        FolderId = folderId,
+                        RemoteItemId = item.Id,
+                        RelativePath = relativePath,
+                        LocalPath = localPath,
+                        Direction = SyncDirection.Delete,
                         RemoteModified = item.LastModified ?? DateTimeOffset.UtcNow
                     });
             }
@@ -143,14 +142,14 @@ public sealed class SyncService(
             {
                 jobs.Add(new SyncJob
                 {
-                    AccountId      = account.Id,
-                    FolderId       = folderId,
-                    RemoteItemId   = item.Id,
-                    RelativePath   = relativePath,
-                    LocalPath      = localPath,
-                    Direction      = SyncDirection.Download,
-                    DownloadUrl    = item.DownloadUrl,
-                    FileSize       = item.Size,
+                    AccountId = account.Id,
+                    FolderId = folderId,
+                    RemoteItemId = item.Id,
+                    RelativePath = relativePath,
+                    LocalPath = localPath,
+                    Direction = SyncDirection.Download,
+                    DownloadUrl = item.DownloadUrl,
+                    FileSize = item.Size,
                     RemoteModified = item.LastModified ?? DateTimeOffset.UtcNow
                 });
             }
@@ -164,7 +163,7 @@ public sealed class SyncService(
     private async Task<(List<SyncJob> Clean, List<SyncConflict> Conflicts)>
         ClassifyJobsAsync(OneDriveAccount account, List<SyncJob> jobs, CancellationToken ct)
     {
-        List<SyncJob>      clean     = [];
+        List<SyncJob> clean = [];
         List<SyncConflict> conflicts = [];
 
         foreach (var job in jobs)
@@ -175,7 +174,7 @@ public sealed class SyncService(
                 continue;
             }
 
-            var localInfo     = new FileInfo(job.LocalPath);
+            var localInfo = new FileInfo(job.LocalPath);
             var localModified = new DateTimeOffset(
                 localInfo.LastWriteTimeUtc, TimeSpan.Zero);
 
@@ -197,15 +196,15 @@ public sealed class SyncService(
                 case ConflictOutcome.Skip:
                     conflicts.Add(new SyncConflict
                     {
-                        AccountId      = account.Id,
-                        FolderId       = job.FolderId,
-                        RemoteItemId   = job.RemoteItemId,
-                        RelativePath   = job.RelativePath,
-                        LocalPath      = job.LocalPath,
-                        LocalModified  = localModified,
+                        AccountId = account.Id,
+                        FolderId = job.FolderId,
+                        RemoteItemId = job.RemoteItemId,
+                        RelativePath = job.RelativePath,
+                        LocalPath = job.LocalPath,
+                        LocalModified = localModified,
                         RemoteModified = job.RemoteModified,
-                        LocalSize      = localInfo.Length,
-                        RemoteSize     = job.FileSize
+                        LocalSize = localInfo.Length,
+                        RemoteSize = job.FileSize
                     });
                     break;
 
@@ -236,7 +235,7 @@ public sealed class SyncService(
     private async Task ProcessJobQueueAsync(OneDriveAccount account, string token, List<SyncJob> jobs, CancellationToken ct)
     {
         var completed = 0;
-        var total     = jobs.Count;
+        var total = jobs.Count;
 
         foreach (var job in jobs)
         {
@@ -254,7 +253,7 @@ public sealed class SyncService(
 
                 var completedJob = job with
                 {
-                    State       = SyncJobState.Completed,
+                    State = SyncJobState.Completed,
                     CompletedAt = DateTimeOffset.UtcNow
                 };
 
@@ -268,9 +267,9 @@ public sealed class SyncService(
             {
                 var failedJob = job with
                 {
-                    State        = SyncJobState.Failed,
+                    State = SyncJobState.Failed,
                     ErrorMessage = ex.Message,
-                    CompletedAt  = DateTimeOffset.UtcNow
+                    CompletedAt = DateTimeOffset.UtcNow
                 };
 
                 await syncRepository.UpdateJobStateAsync(
@@ -291,8 +290,8 @@ public sealed class SyncService(
     }
 
     private static async Task ExecuteJobAsync(
-        SyncJob           job,
-        string            token,
+        SyncJob job,
+        string token,
         CancellationToken ct)
     {
         switch (job.Direction)
@@ -317,7 +316,7 @@ public sealed class SyncService(
         var dir = Path.GetDirectoryName(job.LocalPath);
         if (dir is not null) Directory.CreateDirectory(dir);
 
-        using var http     = new HttpClient();
+        using var http = new HttpClient();
         using var response = await http.GetAsync(
             job.DownloadUrl,
             HttpCompletionOption.ResponseHeadersRead, ct);
@@ -325,7 +324,7 @@ public sealed class SyncService(
         response.EnsureSuccessStatusCode();
 
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        await using var file   = File.Create(job.LocalPath);
+        await using var file = File.Create(job.LocalPath);
         await stream.CopyToAsync(file, ct);
 
         File.SetLastWriteTimeUtc(job.LocalPath, job.RemoteModified.UtcDateTime);
@@ -338,12 +337,12 @@ public sealed class SyncService(
             case ConflictOutcome.UseRemote:
                 var job = new SyncJob
                 {
-                    AccountId      = conflict.AccountId,
-                    FolderId       = conflict.FolderId,
-                    RemoteItemId   = conflict.RemoteItemId,
-                    RelativePath   = conflict.RelativePath,
-                    LocalPath      = conflict.LocalPath,
-                    Direction      = SyncDirection.Download,
+                    AccountId = conflict.AccountId,
+                    FolderId = conflict.FolderId,
+                    RemoteItemId = conflict.RemoteItemId,
+                    RelativePath = conflict.RelativePath,
+                    LocalPath = conflict.LocalPath,
+                    Direction = SyncDirection.Download,
                     RemoteModified = conflict.RemoteModified
                 };
                 await ExecuteJobAsync(job, token, ct);
@@ -361,10 +360,10 @@ public sealed class SyncService(
     private void RaiseProgress(
         string accountId,
         string folderId,
-        int    completed,
-        int    total,
+        int completed,
+        int total,
         string currentFile,
-        bool   isComplete = false) =>
+        bool isComplete = false) =>
         SyncProgressChanged?.Invoke(this, new SyncProgressEventArgs(
             accountId, folderId, completed, total, currentFile, isComplete));
 }

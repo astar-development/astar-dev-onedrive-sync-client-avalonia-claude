@@ -10,21 +10,16 @@ public sealed class GraphService : IGraphService
 
     // ── IGraphService ─────────────────────────────────────────────────────
 
-    public async Task<string> GetDriveIdAsync(
-        string accessToken,
-        CancellationToken ct = default)
-    {
-        var (_, ctx) = await ResolveAsync(accessToken, ct);
-        return ctx.DriveId;
-    }
+    /// <inheritdoc />
+    public async Task<string> GetDriveIdAsync(string accessToken, CancellationToken ct = default)
+        => (await ResolveClientWithDriveContextAsync(accessToken, ct)).Ctx.DriveId;
 
-    public async Task<List<DriveFolder>> GetRootFoldersAsync(
-        string accessToken,
-        CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<List<DriveFolder>> GetRootFoldersAsync(string accessToken, CancellationToken ct = default)
     {
-        var (client, ctx) = await ResolveAsync(accessToken, ct);
+        var (client, driveContext) = await ResolveClientWithDriveContextAsync(accessToken, ct);
 
-        var result = await client.Drives[ctx.DriveId].Items[ctx.RootId].Children
+        var result = await client.Drives[driveContext.DriveId].Items[driveContext.RootId].Children
             .GetAsync(req =>
             {
                 req.QueryParameters.Select = ["id", "name", "folder", "parentReference"];
@@ -46,7 +41,7 @@ public sealed class GraphService : IGraphService
 
             if (page.OdataNextLink is null) break;
 
-            page = await client.Drives[ctx.DriveId].Items[ctx.RootId].Children
+            page = await client.Drives[driveContext.DriveId].Items[driveContext.RootId].Children
                 .WithUrl(page.OdataNextLink)
                 .GetAsync(cancellationToken: ct);
         }
@@ -54,11 +49,8 @@ public sealed class GraphService : IGraphService
         return [.. folders.OrderBy(f => f.Name)];
     }
 
-    public async Task<List<DriveFolder>> GetChildFoldersAsync(
-        string accessToken,
-        string driveId,
-        string parentFolderId,
-        CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<List<DriveFolder>> GetChildFoldersAsync( string accessToken, string driveId, string parentFolderId, CancellationToken ct = default)
     {
         var client = BuildClient(accessToken);
 
@@ -92,9 +84,8 @@ public sealed class GraphService : IGraphService
         return [.. folders.OrderBy(f => f.Name)];
     }
 
-    public async Task<(long Total, long Used)> GetQuotaAsync(
-        string accessToken,
-        CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<(long Total, long Used)> GetQuotaAsync(string accessToken, CancellationToken ct = default)
     {
         var (client, ctx) = await ResolveAsync(accessToken, ct);
 
@@ -107,11 +98,8 @@ public sealed class GraphService : IGraphService
             : (0L, 0L);
     }
 
-    public async Task<DeltaResult> GetDeltaAsync(
-        string  accessToken,
-        string  folderId,
-        string? deltaLink,
-        CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<DeltaResult> GetDeltaAsync(string accessToken, string folderId, string? deltaLink, CancellationToken ct = default)
     {
         var (client, ctx) = await ResolveAsync(accessToken, ct);
 
@@ -126,7 +114,7 @@ public sealed class GraphService : IGraphService
             : await client.Drives[ctx.DriveId].Items[folderId].Delta
                 .GetAsDeltaGetResponseAsync(cancellationToken: ct);
 
-        while (page?.Value is not null)
+        while (page?.Value is not null) // ToDo - could this be the issue? returns 0 items on the first call, but not sure which folder it is for
         {
             foreach (var item in page.Value)
             {
@@ -163,36 +151,29 @@ public sealed class GraphService : IGraphService
 
     // ── Private helpers ───────────────────────────────────────────────────
 
-    private async Task<(GraphServiceClient Client, DriveContext Ctx)> ResolveAsync(
-        string accessToken,
-        CancellationToken ct)
+    private async Task<(GraphServiceClient Client, DriveContext Ctx)> ResolveClientWithDriveContextAsync(string accessToken, CancellationToken ct)
     {
-        var client = BuildClient(accessToken);
+        var graphServiceClient = BuildClient(accessToken);
 
         if (_cache.TryGetValue(accessToken, out var cached))
-            return (client, cached);
+            return (graphServiceClient, cached);
 
-        var drive = await client.Me.Drive
-            .GetAsync(cancellationToken: ct);
+        var drive = await graphServiceClient.Me.Drive.GetAsync(cancellationToken: ct);
 
-        var driveId = drive?.Id
-            ?? throw new InvalidOperationException("Could not retrieve drive ID.");
+        var driveId = drive?.Id ?? throw new InvalidOperationException("Could not retrieve drive ID.");
 
-        var root = await client.Drives[driveId].Root
-            .GetAsync(cancellationToken: ct);
+        var root = await graphServiceClient.Drives[driveId].Root.GetAsync(cancellationToken: ct);
 
-        var rootId = root?.Id
-            ?? throw new InvalidOperationException("Could not retrieve root item ID.");
+        var rootId = root?.Id ?? throw new InvalidOperationException("Could not retrieve root item ID.");
 
-        var ctx = new DriveContext(driveId, rootId);
-        _cache[accessToken] = ctx;
+        var driveContext = new DriveContext(driveId, rootId);
+        _cache[accessToken] = driveContext;
 
-        return (client, ctx);
+        return (graphServiceClient, driveContext);
     }
 
     private static GraphServiceClient BuildClient(string accessToken) =>
-        new(new BaseBearerTokenAuthenticationProvider(
-            new StaticAccessTokenProvider(accessToken)));
+        new(new BaseBearerTokenAuthenticationProvider(new StaticAccessTokenProvider(accessToken)));
 
     private sealed record DriveContext(string DriveId, string RootId);
 
@@ -203,7 +184,6 @@ public sealed class GraphService : IGraphService
             Dictionary<string, object>? additionalAuthenticationContext = null,
             CancellationToken ct = default) => Task.FromResult(token);
 
-        public AllowedHostsValidator AllowedHostsValidator { get; } =
-            new(["graph.microsoft.com"]);
+        public AllowedHostsValidator AllowedHostsValidator { get; } = new(["graph.microsoft.com"]);
     }
 }

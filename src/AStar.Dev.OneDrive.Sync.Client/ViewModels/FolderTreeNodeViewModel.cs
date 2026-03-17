@@ -33,7 +33,7 @@ public sealed partial class FolderTreeNodeViewModel : ObservableObject
     {
         FolderSyncState.Included => "included",
         FolderSyncState.Synced   => "synced",
-        FolderSyncState.Syncing  => "syncing\u2026",
+        FolderSyncState.Syncing  => "syncing ...",
         FolderSyncState.Partial  => "partial",
         FolderSyncState.Conflict => "conflict",
         FolderSyncState.Error    => "error",

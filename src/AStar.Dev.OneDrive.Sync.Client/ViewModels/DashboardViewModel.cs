@@ -27,7 +27,7 @@ public sealed partial class DashboardViewModel(SyncScheduler scheduler) : Observ
 
     public string OverallStatusText => (_anySyncing, _anyErrors, _totalConflicts) switch
     {
-        (true,  _,    _) => "Syncing\u2026",
+        (true,  _,    _) => "Syncing ...",
         (_,     true, _) => "Error",
         (_,     _, > 0) => $"{_totalConflicts} conflict{(_totalConflicts == 1 ? "" : "s")}",
         _                => "All synced"

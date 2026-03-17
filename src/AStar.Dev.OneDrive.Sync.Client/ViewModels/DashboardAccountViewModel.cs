@@ -52,7 +52,7 @@ public sealed partial class DashboardAccountViewModel : ObservableObject
     public bool   IsHealthy   => SyncState is SyncState.Idle && ConflictCount == 0;
     public string StatusLabel => (SyncState, ConflictCount) switch
     {
-        (SyncState.Syncing,  _) => "Syncing\u2026",
+        (SyncState.Syncing,  _) => "Syncing ...",
         (SyncState.Error,    _) => "Error",
         (_, > 0)                => $"{ConflictCount} conflict{(ConflictCount == 1 ? "" : "s")}",
         (SyncState.Pending,  _) => "Pending",

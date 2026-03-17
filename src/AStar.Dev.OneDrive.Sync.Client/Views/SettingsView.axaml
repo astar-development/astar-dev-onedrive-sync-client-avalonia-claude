@@ -193,7 +193,7 @@
                                                      Watermark="e.g. /home/user/OneDrive/personal"
                                                      CornerRadius="{StaticResource RadiusMd}"/>
                                             <Button Grid.Column="2"
-                                                    Content="Browse\u2026"
+                                                    Content="Browse ..."
                                                     Padding="10,6"
                                                     CornerRadius="{StaticResource RadiusMd}"
                                                     Background="Transparent"

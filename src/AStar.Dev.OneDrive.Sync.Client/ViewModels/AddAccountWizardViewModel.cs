@@ -120,7 +120,7 @@ public sealed partial class AddAccountWizardViewModel(
         if (IsWaitingForAuth) return;
 
         SignInHasError   = false;
-        SignInStatusText = "Waiting for sign-in\u2026";
+        SignInStatusText = "Waiting for sign-in ...";
         IsWaitingForAuth = true;
 
         _authCts = new CancellationTokenSource();

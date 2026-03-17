@@ -5,40 +5,45 @@ namespace AStar.Dev.OneDrive.Sync.Client.Services.Graph;
 public interface IGraphService
 {
     /// <summary>
-    /// Returns the drive ID for the authenticated user.
-    /// Result is cached — safe to call repeatedly.
+    /// Returns the ID of the user's default drive (OneDrive for Business or Personal).
     /// </summary>
-    Task<string> GetDriveIdAsync(
-        string accessToken,
-        CancellationToken ct = default);
+    /// <param name="accessToken">The access token for the authenticated user.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>The drive ID. (which is cached to reduce calls)</returns>
+    Task<string> GetDriveIdAsync(string accessToken, CancellationToken ct = default);
 
-    /// <summary>Returns the root-level folders in the user's OneDrive.</summary>
-    Task<List<DriveFolder>> GetRootFoldersAsync(
-        string accessToken,
-        CancellationToken ct = default);
+    /// <summary>
+    /// Returns the immediate child folders of the root folder.
+    /// </summary>
+    /// <param name="accessToken">The access token for the authenticated user.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>The list of child folders.</returns>
+    Task<List<DriveFolder>> GetRootFoldersAsync(string accessToken, CancellationToken ct = default);
 
     /// <summary>
     /// Returns the immediate child folders of the given parent folder.
     /// Used for lazy-loading the folder tree.
     /// </summary>
-    Task<List<DriveFolder>> GetChildFoldersAsync(
-        string accessToken,
-        string driveId,
-        string parentFolderId,
-        CancellationToken ct = default);
+    /// <param name="accessToken">The access token for the authenticated user.</param>
+    /// <param name="driveId">The ID of the drive.</param>
+    /// <param name="parentFolderId">The ID of the parent folder.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>The list of child folders.</returns>
+    Task<List<DriveFolder>> GetChildFoldersAsync(string accessToken, string driveId, string parentFolderId, CancellationToken ct = default);
 
     /// <summary>Returns the user's OneDrive storage quota.</summary>
-    Task<(long Total, long Used)> GetQuotaAsync(
-        string accessToken,
-        CancellationToken ct = default);
+    /// <param name="accessToken">The access token for the authenticated user.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>The total and used storage space.</returns>
+    Task<(long Total, long Used)> GetQuotaAsync(string accessToken, CancellationToken ct = default);
 
     /// <summary>
-    /// Executes a delta query for the given folder.
-    /// Pass null deltaLink for a full sync (first run).
+    /// Returns the changes (delta) since the last sync, or all items if no delta link is provided.
     /// </summary>
-    Task<DeltaResult> GetDeltaAsync(
-        string  accessToken,
-        string  folderId,
-        string? deltaLink,
-        CancellationToken ct = default);
+    /// <param name="accessToken">The access token for the authenticated user.</param>
+    /// <param name="folderId">The ID of the folder to query for changes.</param>
+    /// <param name="deltaLink">The delta link for incremental sync.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>The delta result containing the changes.</returns>
+    Task<DeltaResult> GetDeltaAsync(string  accessToken,string  folderId, string? deltaLink, CancellationToken ct = default);
 }
