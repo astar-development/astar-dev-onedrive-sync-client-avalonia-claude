@@ -34,11 +34,22 @@ public sealed class SyncScheduler : IAsyncDisposable
     public void Start(TimeSpan? interval = null)
     {
         _interval = interval ?? DefaultInterval;
-        _timer    = new Timer(
-            OnTimerTick,
-            state:       null,
-            dueTime:     _interval,      // first tick after one interval
-            period:      _interval);
+        
+        try
+        {
+            _timer    = new Timer(
+                OnTimerTick,
+                state:       null,
+                dueTime:     _interval,      // first tick after one interval
+                period:      _interval);
+
+            _running = false;
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Fatal(ex, "[SyncScheduler.Start] FATAL ERROR creating Timer: {Error}", ex.Message);
+            throw;
+        }
     }
 
     public void Stop()
@@ -134,6 +145,7 @@ public sealed class SyncScheduler : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         Stop();
+
         if (_timer is not null)
             await _timer.DisposeAsync();
     }

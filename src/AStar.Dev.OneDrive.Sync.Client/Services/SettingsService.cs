@@ -39,8 +39,7 @@ public sealed class SettingsService : ISettingsService
             try
             {
                 await using var stream = File.OpenRead(svc._path);
-                svc.Current = await JsonSerializer.DeserializeAsync<AppSettings>(
-                    stream, JsonOpts) ?? new AppSettings();
+                svc.Current = await JsonSerializer.DeserializeAsync<AppSettings>(stream, JsonOpts) ?? new AppSettings();
             }
             catch
             {

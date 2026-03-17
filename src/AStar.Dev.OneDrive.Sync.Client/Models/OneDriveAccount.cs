@@ -1,5 +1,3 @@
-using AStar.Dev.OneDrive.Sync.Client.Models;
-
 namespace AStar.Dev.OneDrive.Sync.Client.Models;
 
 public sealed class OneDriveAccount

@@ -11,7 +11,14 @@ namespace AStar.Dev.OneDrive.Sync.Client;
 
 public partial class MainWindow : Window
 {
-    public MainWindow(
+    private MainWindowViewModel? _vm;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+    }
+
+    public async Task InitialiseAsync(
         IAuthService       authService,
         IGraphService      graphService,
         IStartupService    startupService,
@@ -21,12 +28,14 @@ public partial class MainWindow : Window
         ISettingsService   settingsService,
         IAccountRepository accountRepository)
     {
-        InitializeComponent();
-        var vm = new MainWindowViewModel(
+        _vm = new MainWindowViewModel(
             authService, graphService, startupService,
             syncService, scheduler, syncRepository,
             settingsService, accountRepository);
-        DataContext = vm;
-        Opened += async (_, _) => await vm.InitialiseAsync();
+
+        DataContext = _vm;
+
+        // InitialiseAsync loads accounts etc — runs after DataContext is set
+        await _vm.InitialiseAsync();
     }
 }

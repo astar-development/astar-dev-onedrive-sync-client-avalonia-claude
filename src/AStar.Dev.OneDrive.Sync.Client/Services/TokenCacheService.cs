@@ -36,19 +36,59 @@ public sealed class TokenCacheService
     /// </summary>
     public async Task RegisterAsync(IPublicClientApplication app)
     {
-        var storageProperties = new StorageCreationPropertiesBuilder(
-                CacheFileName,
-                _cacheDirectory)
-            .WithLinuxKeyring(
-                schemaName:     "dev.astar.onedrivesync",
-                collection:     MsalCacheHelper.LinuxKeyRingDefaultCollection,
-                secretLabel:    "OneDrive Sync token cache",
-                attribute1:     new KeyValuePair<string, string>("Version", "1"),
-                attribute2:     new KeyValuePair<string, string>("ProductGroup", "AStar"))
-            .WithMacKeyChain(
-                serviceName: AppName,
-                accountName: "MSALCache")
-            .Build();
+        StorageCreationProperties storageProperties;
+
+        if (OperatingSystem.IsLinux())
+        {
+            // On Linux try keyring first, fall back to unprotected file
+            // They cannot be combined in the same builder
+            try
+            {
+                var keyringProperties = new StorageCreationPropertiesBuilder(
+                        CacheFileName,
+                        _cacheDirectory)
+                    .WithLinuxKeyring(
+                        schemaName:  "dev.astar.onedrivesync",
+                        collection:  MsalCacheHelper.LinuxKeyRingDefaultCollection,
+                        secretLabel: "OneDrive Sync token cache",
+                        attribute1:  new KeyValuePair<string, string>("Version", "1"),
+                        attribute2:  new KeyValuePair<string, string>("ProductGroup", "AStar"))
+                    .WithMacKeyChain(
+                        serviceName: AppName,
+                        accountName: "MSALCache")
+                    .Build();
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var helper = await MsalCacheHelper
+                    .CreateAsync(keyringProperties)
+                    .WaitAsync(cts.Token);
+                helper.RegisterCache(app.UserTokenCache);
+                return;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex,
+                    "[TokenCache] Keyring unavailable, falling back to plaintext cache");
+            }
+
+            // Fallback — separate builder with only unprotected file
+            storageProperties = new StorageCreationPropertiesBuilder(
+                    CacheFileName + ".plaintext",
+                    _cacheDirectory)
+                .WithLinuxUnprotectedFile()
+                .Build();
+        }
+        else
+        {
+            // Windows / macOS — use keychain/DPAPI
+            storageProperties = new StorageCreationPropertiesBuilder(
+                    CacheFileName,
+                    _cacheDirectory)
+                .WithMacKeyChain(
+                    serviceName: AppName,
+                    accountName: "MSALCache")
+                .Build();
+        }
 
         var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
         cacheHelper.RegisterCache(app.UserTokenCache);

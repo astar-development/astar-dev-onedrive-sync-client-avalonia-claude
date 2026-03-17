@@ -44,26 +44,88 @@ public sealed partial class MainWindowViewModel(
 
     // ── Active view ───────────────────────────────────────────────────────
 
-    public object? ActiveView => ActiveSection switch
+    public object? ActiveView
     {
-        NavSection.Dashboard => DashboardViewInstance,
-        NavSection.Files     => FilesViewInstance,
-        NavSection.Activity  => ActivityViewInstance,
-        NavSection.Accounts  => AccountsViewInstance,
-        NavSection.Settings  => SettingsViewInstance,
-        _                    => null
-    };
+        get
+        {
+            var result = ActiveSection switch
+            {
+                NavSection.Dashboard => (object)DashboardViewInstance,
+                NavSection.Files     => (object)FilesViewInstance,
+                NavSection.Activity  => (object)ActivityViewInstance,
+                NavSection.Accounts  => (object)AccountsViewInstance,
+                NavSection.Settings  => (object)SettingsViewInstance,
+                _                    => null
+            };
 
-    private DashboardView DashboardViewInstance =>
-        _dashboardView ??= new DashboardView { DataContext = Dashboard };
-    private FilesView    FilesViewInstance    =>
-        _filesView    ??= new FilesView    { DataContext = Files };
-    private ActivityView ActivityViewInstance =>
-        _activityView ??= new ActivityView { DataContext = Activity };
-    private AccountsView AccountsViewInstance =>
-        _accountsView ??= new AccountsView { DataContext = this };
-    private SettingsView SettingsViewInstance =>
-        _settingsView ??= new SettingsView { DataContext = Settings };
+            return result;
+        }
+    }
+
+    private DashboardView DashboardViewInstance
+    {
+        get
+        {
+            if (_dashboardView is null)
+            {
+                _dashboardView = new DashboardView { DataContext = Dashboard };
+            }
+
+            return _dashboardView;
+        }
+    }
+
+    private FilesView FilesViewInstance
+    {
+        get
+        {
+            if (_filesView is null)
+            {
+                _filesView = new FilesView { DataContext = Files };
+            }
+
+            return _filesView;
+        }
+    }
+
+    private ActivityView ActivityViewInstance
+    {
+        get
+        {
+            if (_activityView is null)
+            {
+                _activityView = new ActivityView { DataContext = Activity };
+            }
+            
+            return _activityView;
+        }
+    }
+
+    private AccountsView AccountsViewInstance
+    {
+        get
+        {
+            if (_accountsView is null)
+            {
+                _accountsView = new AccountsView { DataContext = this };
+            }
+            
+            return _accountsView;
+        }
+    }
+
+    private SettingsView SettingsViewInstance
+    {
+        get
+        {
+            if (_settingsView is null)
+            {
+                _settingsView = new SettingsView { DataContext = Settings };
+            }
+
+            return _settingsView;
+        }
+    }
 
     private DashboardView? _dashboardView;
     private FilesView?     _filesView;
@@ -73,7 +135,7 @@ public sealed partial class MainWindowViewModel(
 
     // ── Child view models ─────────────────────────────────────────────────
 
-    public AccountsViewModel  Accounts  { get; } =
+    public AccountsViewModel  Accounts  { get; } = 
         new(authService, graphService, App.Repository);
 
     public FilesViewModel     Files     { get; } =
@@ -94,38 +156,47 @@ public sealed partial class MainWindowViewModel(
 
     public async Task InitialiseAsync()
     {
-        syncService.SyncProgressChanged += OnSyncProgressChanged;
-        syncService.JobCompleted        += OnJobCompleted;
-        syncService.ConflictDetected    += OnConflictDetected;
-
-        Accounts.AccountSelected += OnAccountSelected;
-        Accounts.AccountAdded    += OnAccountAdded;
-        Accounts.AccountRemoved  += OnAccountRemoved;
-        Accounts.PropertyChanged += (_, e) =>
+        try
         {
-            if (e.PropertyName == nameof(AccountsViewModel.ActiveAccount))
-                SyncStatusBarToActiveAccount();
-        };
+            syncService.SyncProgressChanged += OnSyncProgressChanged;
+            syncService.JobCompleted        += OnJobCompleted;
+            syncService.ConflictDetected    += OnConflictDetected;
 
-        var restored = await startupService.RestoreAccountsAsync();
-        Accounts.RestoreAccounts(restored);
+            Accounts.AccountSelected += OnAccountSelected;
+            Accounts.AccountAdded    += OnAccountAdded;
+            Accounts.AccountRemoved  += OnAccountRemoved;
+            Accounts.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(AccountsViewModel.ActiveAccount))
+                    SyncStatusBarToActiveAccount();
+            };
 
-        foreach (var account in restored)
-        {
-            Files.AddAccount(account);
-            Dashboard.AddAccount(account);
+            var restored = await startupService.RestoreAccountsAsync();
+            
+            Accounts.RestoreAccounts(restored);
+
+            foreach (var account in restored)
+            {
+                Files.AddAccount(account);
+                Dashboard.AddAccount(account);
+            }
+
+            Settings.LoadAccounts(restored);
+
+            var active = restored.FirstOrDefault(a => a.IsActive);
+            if (active is not null)
+            {
+                await Files.ActivateAccountAsync(active.Id);
+                
+                await Activity.SetActiveAccountAsync(active.Id, active.Email);
+            }
+
+            SyncStatusBarToActiveAccount();
         }
-
-        Settings.LoadAccounts(restored);
-
-        var active = restored.FirstOrDefault(a => a.IsActive);
-        if (active is not null)
+        catch (Exception ex)
         {
-            await Files.ActivateAccountAsync(active.Id);
-            await Activity.SetActiveAccountAsync(active.Id, active.Email);
+            Serilog.Log.Fatal(ex, "[MainWindowViewModel.InitialiseAsync] FATAL ERROR: {Error}", ex.Message);
         }
-
-        SyncStatusBarToActiveAccount();
     }
 
     // ── Sync commands ─────────────────────────────────────────────────────

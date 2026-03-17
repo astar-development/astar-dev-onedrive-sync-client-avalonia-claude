@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Avalonia.X11;
 using AStar.Dev.OneDrive.Sync.Client.Data;
 using AStar.Dev.OneDrive.Sync.Client.Data.Repositories;
 using AStar.Dev.OneDrive.Sync.Client.Services;
@@ -11,7 +10,6 @@ using AStar.Dev.OneDrive.Sync.Client.Services.Localization;
 using AStar.Dev.OneDrive.Sync.Client.Services.Settings;
 using AStar.Dev.OneDrive.Sync.Client.Services.Startup;
 using AStar.Dev.OneDrive.Sync.Client.Services.Sync;
-using AStar.Dev.OneDrive.Sync.Client.Views;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 
@@ -29,63 +27,74 @@ public partial class App : Application
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
-    public override async void OnFrameworkInitializationCompleted()
+    public override void OnFrameworkInitializationCompleted()
+{
+    base.OnFrameworkInitializationCompleted();
+
+    if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
     {
-        // ── Localisation ─────────────────────────────────────────────────
-        var locService = new LocalizationService();
-        await locService.InitialiseAsync(new CultureInfo("en-GB"));
-        Localisation = locService;
+        // Create a lightweight shell window immediately — no dependencies needed
+        var mainWindow = new MainWindow();
+        desktop.MainWindow = mainWindow;
 
-        // ── Settings ─────────────────────────────────────────────────────
-        var settingsService = await SettingsService.LoadAsync();
-        AppSettings = settingsService;
+        // Do ALL async initialisation after the window is shown
+        mainWindow.Opened += async (_, _) => await BootstrapAsync(mainWindow);
 
-        // ── Theme (apply saved preference) ───────────────────────────────
-        var themeService = new ThemeService();
-        themeService.Apply(settingsService.Current.Theme);
-        Theme = themeService;
-
-        // ── Database ─────────────────────────────────────────────────────
-        var db = DbContextFactory.Create();
-        await db.Database.MigrateAsync();
-        var accountRepository = new AccountRepository(db);
-        var syncRepository    = new SyncRepository(db);
-        Repository = accountRepository;
-
-        // ── Auth ─────────────────────────────────────────────────────────
-        var tokenCache  = new TokenCacheService();
-        var authService = new AuthService(tokenCache);
-        Auth = authService;
-
-        // ── Graph ─────────────────────────────────────────────────────────
-        var graphService = new GraphService();
-
-        // ── Sync ──────────────────────────────────────────────────────────
-        var syncService = new SyncService(
-            authService, graphService, accountRepository, syncRepository);
-        var scheduler = new SyncScheduler(syncService, accountRepository);
-        SyncService = syncService;
-        Scheduler   = scheduler;
-
-        // ── Startup ───────────────────────────────────────────────────────
-        var startupService = new StartupService(accountRepository, authService);
-
-        // ── Main window ──────────────────────────────────────────────────
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        desktop.Exit += async (_, _) =>
         {
-            desktop.MainWindow = new MainWindow(
+            if (Scheduler is not null)
+                await Scheduler.DisposeAsync();
+            Serilog.Log.CloseAndFlush();
+        };
+    }
+}
+
+    private static async Task BootstrapAsync(MainWindow window)
+    {
+        try
+        {
+            var locService = new LocalizationService();
+            await locService.InitialiseAsync(new CultureInfo("en-GB"));
+            Localisation = locService;
+
+            var settingsService = await SettingsService.LoadAsync();
+            AppSettings = settingsService;
+
+            var themeService = new ThemeService();
+            themeService.Apply(settingsService.Current.Theme);
+            Theme = themeService;
+
+            var db = DbContextFactory.Create();
+            await db.Database.MigrateAsync();
+            var accountRepository = new AccountRepository(db);
+            var syncRepository    = new SyncRepository(db);
+            Repository = accountRepository;
+
+            var tokenCache  = new TokenCacheService();
+            var authService = new AuthService(tokenCache);
+            Auth = authService;
+
+            var graphService   = new GraphService();
+            var syncService    = new SyncService(
+                authService, graphService, accountRepository, syncRepository);
+            var scheduler      = new SyncScheduler(syncService, accountRepository);
+            SyncService        = syncService;
+            Scheduler          = scheduler;
+
+            var startupService = new StartupService(accountRepository, authService);
+
+            // Now wire up the real ViewModel
+            await window.InitialiseAsync(
                 authService, graphService, startupService,
                 syncService, scheduler, syncRepository,
                 settingsService, accountRepository);
 
-            desktop.MainWindow.Opened += (_, _) =>
-                scheduler.Start(
-                    TimeSpan.FromMinutes(settingsService.Current.SyncIntervalMinutes));
-
-            desktop.Exit += async (_, _) =>
-                await scheduler.DisposeAsync();
+            scheduler.Start(
+                TimeSpan.FromMinutes(settingsService.Current.SyncIntervalMinutes));
         }
-
-        base.OnFrameworkInitializationCompleted();
+        catch (Exception ex)
+        {
+            Serilog.Log.Fatal(ex, "[App] Fatal error during bootstrap: {Message}", ex.Message);
+        }
     }
 }
