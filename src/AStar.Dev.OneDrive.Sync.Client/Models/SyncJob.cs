@@ -15,7 +15,7 @@ public sealed record SyncJob
     public SyncDirection Direction { get; init; }
     public SyncJobState State { get; set; } = SyncJobState.Queued;
     public string? ErrorMessage { get; set; }
-    public string? DownloadUrl { get; init; }
+    public string? DownloadUrl { get; set; }
     public long FileSize { get; init; }
     public DateTimeOffset RemoteModified { get; init; }
     public DateTimeOffset QueuedAt { get; init; } = DateTimeOffset.UtcNow;

@@ -4,6 +4,7 @@ using AStar.Dev.OneDrive.Sync.Client.Models;
 using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
 using AStar.Dev.OneDrive.Sync.Client.Services.Graph;
 using AStar.Dev.OneDrive.Sync.Client.ViewModels;
+using AStar.Dev.Utilities;
 using Serilog;
 
 namespace AStar.Dev.OneDrive.Sync.Client.Services.Sync;
@@ -121,7 +122,9 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
                 continue;
 
             var relativePath = item.RelativePath ?? item.Name;
-            var localPath = Path.Combine(account.LocalSyncPath, relativePath);
+            var localPath    = Path.Combine(
+                account.LocalSyncPath,
+                relativePath.Replace('/', Path.DirectorySeparatorChar));
 
             if(item.IsDeleted)
             {
@@ -135,6 +138,7 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
                         RelativePath = relativePath,
                         LocalPath = localPath,
                         Direction = SyncDirection.Delete,
+                        DownloadUrl = item.DownloadUrl,
                         RemoteModified = item.LastModified ?? DateTimeOffset.UtcNow
                     });
                 }
@@ -282,7 +286,7 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
         await syncRepository.ClearCompletedJobsAsync(account.Id);
     }
 
-    private static async Task ExecuteJobAsync(SyncJob job, CancellationToken ct)
+    private async Task ExecuteJobAsync(SyncJob job, CancellationToken ct)
     {
         switch(job.Direction)
         {
@@ -299,19 +303,19 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
         }
     }
 
-    private static async Task DownloadFileAsync(SyncJob job, CancellationToken ct)
+    private async Task DownloadFileAsync(SyncJob job, CancellationToken ct)
     {
-        if(job.DownloadUrl is null)
-            return;
+        if(job.DownloadUrl.IsNullOrWhiteSpace())
+        {
+            job.DownloadUrl = $"/me/drive/items/{job.RemoteItemId}";
+        }
 
         var dir = Path.GetDirectoryName(job.LocalPath);
         if(dir is not null)
             _ = Directory.CreateDirectory(dir);
 
         using var http = new HttpClient();
-        using HttpResponseMessage response = await http.GetAsync(
-            job.DownloadUrl,
-            HttpCompletionOption.ResponseHeadersRead, ct);
+        using HttpResponseMessage response = await http.GetAsync(job.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
 
         _ = response.EnsureSuccessStatusCode();
 
