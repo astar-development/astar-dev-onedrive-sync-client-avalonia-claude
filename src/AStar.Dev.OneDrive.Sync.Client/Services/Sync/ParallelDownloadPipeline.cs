@@ -18,23 +18,24 @@ namespace AStar.Dev.OneDrive.Sync.Client.Services.Sync;
 /// </summary>
 public sealed class ParallelDownloadPipeline(
     ISyncRepository syncRepository,
-    int             workerCount = 8)
+    int workerCount = 8)
 {
     private readonly HttpDownloader _downloader = new();
 
     // ── Public API ────────────────────────────────────────────────────────
 
     public async Task RunAsync(
-        IEnumerable<SyncJob>                      jobs,
-        string                                    accessToken,
-        Action<SyncProgressEventArgs>             onProgress,
-        Action<JobCompletedEventArgs>             onJobCompleted,
-        string                                    accountId,
-        string                                    folderId,
-        CancellationToken                         ct = default)
+        IEnumerable<SyncJob> jobs,
+        string accessToken,
+        Action<SyncProgressEventArgs> onProgress,
+        Action<JobCompletedEventArgs> onJobCompleted,
+        string accountId,
+        string folderId,
+        CancellationToken ct = default)
     {
         var jobList = jobs.ToList();
-        if (jobList.Count == 0) return;
+        if(jobList.Count == 0)
+            return;
 
         var total     = jobList.Count;
         var completed = 0;
@@ -53,33 +54,35 @@ public sealed class ParallelDownloadPipeline(
         void OnJobComplete(SyncJob job, bool success, string? error)
         {
             int done;
-            lock (lockObj)
+            lock(lockObj)
             {
-                if (success) completed++;
-                else         failed++;
+                if(success)
+                    completed++;
+                else
+                    failed++;
                 done = completed + failed;
             }
-
+Serilog.Log.Information(
+    "[Pipeline] OnJobComplete done={Done} total={Total} isComplete={IsComplete}",
+    done, total, done == total);
             onProgress(new SyncProgressEventArgs(
-                accountId:   accountId,
-                folderId:    folderId,
-                completed:   done,
-                total:       total,
+                accountId: accountId,
+                folderId: folderId,
+                completed: done,
+                total: total,
                 currentFile: job.RelativePath,
                 syncState: ViewModels.SyncState.Syncing,
-                isComplete:  done == total));
+                isComplete: done == total));
             onJobCompleted(new JobCompletedEventArgs(
                 job with
                 {
-                    State       = success ? SyncJobState.Completed : SyncJobState.Failed,
+                    State = success ? SyncJobState.Completed : SyncJobState.Failed,
                     ErrorMessage = error,
-                    CompletedAt  = DateTimeOffset.UtcNow
+                    CompletedAt = DateTimeOffset.UtcNow
                 }));
-            
-            if (success)
-                Serilog.Log.Information(
-                    "[Pipeline] ✓ {Path} ({Done}/{Total})",
-                    job.RelativePath, done, total);
+
+            if(success)
+                Serilog.Log.Information("[Pipeline] ✓ {Path} ({Done}/{Total})", job.RelativePath, done, total);
         }
 
         // Start N worker tasks
@@ -91,7 +94,7 @@ public sealed class ParallelDownloadPipeline(
         // Producer — feed jobs into the channel with backpressure
         try
         {
-            foreach (var job in jobList)
+            foreach(SyncJob? job in jobList)
             {
                 ct.ThrowIfCancellationRequested();
                 await channel.Writer.WriteAsync(job, ct);

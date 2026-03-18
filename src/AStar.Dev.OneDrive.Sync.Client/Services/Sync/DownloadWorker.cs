@@ -20,7 +20,7 @@ public sealed class DownloadWorker(
         Action<SyncJob, bool, string?>            onJobComplete,
         CancellationToken                         ct)
     {
-        await foreach (var job in reader.ReadAllAsync(ct))
+        await foreach (SyncJob job in reader.ReadAllAsync(ct))
         {
             ct.ThrowIfCancellationRequested();
 

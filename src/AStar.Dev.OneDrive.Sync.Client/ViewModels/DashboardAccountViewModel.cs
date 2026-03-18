@@ -90,7 +90,6 @@ public sealed partial class DashboardAccountViewModel : ObservableObject
     [RelayCommand]
     private async Task SyncNowAsync()
     {
-        IsSyncing = true;
         SyncState = SyncState.Syncing;
         try
         {
@@ -104,13 +103,18 @@ public sealed partial class DashboardAccountViewModel : ObservableObject
 
     // ── Public update API (called by DashboardViewModel) ─────────────────
 
-    public void UpdateSyncState(AccountCardViewModel card) => Dispatcher.UIThread.Post(() =>
+    public void UpdateSyncState(SyncState state, int conflicts)
+    {Serilog.Log.Information(
+        "[Dashboard] UpdateSyncState state={State} conflicts={C}",
+        state, conflicts);
+        Dispatcher.UIThread.Post(() =>
                                                                         {
-                                                                            SyncState = card.SyncState;
-                                                                            ConflictCount = card.ConflictCount;
-                                                                            IsSyncing = card.SyncState == SyncState.Syncing;
-                                                                            UpdateLastSyncText(card.SyncState);
+                                                                            SyncState = state;
+                                                                            ConflictCount = conflicts;
+                                                                            IsSyncing = state == SyncState.Syncing;  // ← drives button enable
+                                                                            UpdateLastSyncText(state);
                                                                         });
+    }
 
     public void AddRecentActivity(ActivityItemViewModel item) => Dispatcher.UIThread.Post(() =>
                                                                       {

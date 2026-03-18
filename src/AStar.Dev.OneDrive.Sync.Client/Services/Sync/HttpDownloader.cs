@@ -54,7 +54,7 @@ public sealed class HttpDownloader : IDisposable
                         throw new HttpRequestException(
                             $"Rate limited after {MaxRetries} retries.");
 
-                    var delay = GetRetryDelay(response, attempt);
+                    TimeSpan delay = GetRetryDelay(response, attempt);
                     Serilog.Log.Warning(
                         "[HttpDownloader] 429 received, waiting {Delay:F1}s " +
                         "(attempt {Attempt}/{Max})",
@@ -73,7 +73,7 @@ public sealed class HttpDownloader : IDisposable
                     Directory.CreateDirectory(dir);
 
                 // Stream to disk
-                await using var stream = await response.Content
+                await using Stream stream = await response.Content
                     .ReadAsStreamAsync(ct);
                 await using var file = new FileStream(
                     localPath,
@@ -101,7 +101,7 @@ public sealed class HttpDownloader : IDisposable
             catch (HttpRequestException) when (attempt <= MaxRetries)
             {
                 // Transient network error — retry with backoff
-                var delay = GetBackoffDelay(attempt);
+                TimeSpan delay = GetBackoffDelay(attempt);
                 Serilog.Log.Warning(
                     "[HttpDownloader] Network error, retrying in {Delay:F1}s " +
                     "(attempt {Attempt}/{Max})",
@@ -126,7 +126,7 @@ public sealed class HttpDownloader : IDisposable
 
         if (response.Headers.RetryAfter?.Date is { } date)
         {
-            var wait = date - DateTimeOffset.UtcNow;
+            TimeSpan wait = date - DateTimeOffset.UtcNow;
             if (wait > TimeSpan.Zero) return wait + TimeSpan.FromSeconds(1);
         }
 

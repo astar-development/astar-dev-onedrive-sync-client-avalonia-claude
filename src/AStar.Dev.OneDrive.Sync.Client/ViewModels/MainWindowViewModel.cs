@@ -239,11 +239,16 @@ public sealed partial class MainWindowViewModel(
     private void OnSyncProgressChanged(object? sender, SyncProgressEventArgs e)
         => Dispatcher.UIThread.Post(() =>
         {
+
+        Serilog.Log.Information(
+            "[Progress] AccountId={Id} Completed={C} Total={T} IsComplete={Done}",
+            e.AccountId, e.Completed, e.Total, e.IsComplete);
+
             AccountCardViewModel? card = Accounts.Accounts.FirstOrDefault(a => a.Id == e.AccountId);
             if(card is null)
                 return;
 
-            card.SyncState = e.IsComplete ? SyncState.Idle : SyncState.Syncing;
+            card.SyncState = e.SyncState;
             UpdateSyncStatus(e, card);
 
             Dashboard.UpdateAccountSyncState(e.AccountId, card);
@@ -258,7 +263,7 @@ public sealed partial class MainWindowViewModel(
         card.SyncState = e.SyncState switch
         {
             SyncState.NoSyncPathConfigured => SyncState.NoSyncPathConfigured,
-            _ => e.IsComplete ? SyncState.Idle : SyncState.Syncing,
+            _ => e.SyncState == SyncState.Completed ? SyncState.Idle : SyncState.Syncing,
         };
     }
 
