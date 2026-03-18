@@ -1,21 +1,17 @@
 {
   "locale": "en-GB",
   "culture": "en-GB",
-
   "App.Title": "OneDrive Sync",
-
   "Nav.Dashboard": "Dashboard",
   "Nav.Files": "Files",
   "Nav.Activity": "Activity",
   "Nav.Accounts": "Accounts",
   "Nav.Settings": "Settings",
-
   "Nav.Tooltip.Dashboard": "Dashboard — all accounts overview",
   "Nav.Tooltip.Files": "Files — browse and manage sync folders",
   "Nav.Tooltip.Activity": "Activity — delta log and conflicts",
   "Nav.Tooltip.Accounts": "Accounts — add or remove OneDrive accounts",
   "Nav.Tooltip.Settings": "Settings — theme, language and sync policy",
-
   "StatusBar.Synced": "Synced",
   "StatusBar.Syncing": "Syncing…",
   "StatusBar.Pending": "{0} pending",
@@ -27,27 +23,23 @@
   "StatusBar.NoAccount": "No account selected",
   "StatusBar.StorageUsed": "{0} of {1} used",
   "StatusBar.ConflictPolicy": "Policy: {0}",
-
   "ConflictPolicy.Ignore": "Ignore",
   "ConflictPolicy.KeepBoth": "Keep both",
   "ConflictPolicy.LastWriteWins": "Last write wins",
   "ConflictPolicy.LocalWins": "Local wins",
   "ConflictPolicy.RemoteWins": "Remote wins",
-
   "Account.AddAccount": "Add account",
   "Account.RemoveAccount": "Remove account",
   "Account.SignIn": "Sign in",
   "Account.SignOut": "Sign out",
   "Account.NoAccounts": "No accounts added yet",
   "Account.NoAccountsHint": "Add a Microsoft account to get started",
-
   "Dashboard.Title": "Dashboard",
   "Dashboard.AllAccounts": "All accounts",
   "Dashboard.StorageUsed": "Storage used",
   "Dashboard.FilesTracked": "Files tracked",
   "Dashboard.LastDelta": "Last delta",
   "Dashboard.ConflictsOpen": "Open conflicts",
-
   "Files.Title": "Files",
   "Files.SelectFolders": "Select folders to sync",
   "Files.NoFolders": "No folders selected",
@@ -59,7 +51,6 @@
   "Files.FolderStatus.Conflict": "Conflict",
   "Files.FolderStatus.Excluded": "Excluded",
   "Files.FolderStatus.Syncing": "Syncing",
-
   "Activity.Title": "Activity",
   "Activity.Filter.All": "All",
   "Activity.Filter.Uploads": "Uploads",
@@ -72,7 +63,6 @@
   "Activity.Conflict": "Conflict",
   "Activity.Error": "Error",
   "Activity.Deleted": "Deleted",
-
   "Conflict.Title": "Resolve conflict",
   "Conflict.LocalFile": "Local file",
   "Conflict.RemoteFile": "Remote file",
@@ -82,7 +72,6 @@
   "Conflict.ResolveAll": "Resolve all",
   "Conflict.Skip": "Skip",
   "Conflict.ChooseResolution": "Choose resolution",
-
   "Settings.Title": "Settings",
   "Settings.Section.Appearance": "Appearance",
   "Settings.Section.Language": "Language",
@@ -97,7 +86,6 @@
   "Settings.DeltaSyncInterval": "Delta sync interval",
   "Settings.DeltaSyncInterval.Minutes": "{0} minutes",
   "Settings.TokenCachePath": "Token cache path",
-
   "Wizard.AddAccount.Title": "Add OneDrive account",
   "Wizard.AddAccount.Step1": "Sign in",
   "Wizard.AddAccount.Step2": "Select folders",
@@ -113,7 +101,6 @@
   "Wizard.AddAccount.Cancel": "Cancel",
   "Wizard.AddAccount.Back": "Back",
   "Wizard.AddAccount.Next": "Next",
-
   "Common.Ok": "OK",
   "Common.Cancel": "Cancel",
   "Common.Close": "Close",

@@ -120,9 +120,7 @@
             <param name="name"></param>
         </member>
         <member name="T:AStar.Dev.Logging.Extensions.LogExtensions`1">
-            <summary>
-            </summary>
-            <typeparam name="T"></typeparam>
+            <inheritdoc />
         </member>
         <member name="M:AStar.Dev.Logging.Extensions.LogExtensions`1.BeginScope``1(``0)">
             <inheritdoc />

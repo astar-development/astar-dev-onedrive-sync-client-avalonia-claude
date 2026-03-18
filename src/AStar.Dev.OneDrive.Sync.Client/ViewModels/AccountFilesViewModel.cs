@@ -10,12 +10,12 @@ using Avalonia.Media;
 
 namespace AStar.Dev.OneDrive.Sync.Client.ViewModels;
 
-public sealed partial class AccountFilesViewModel : ObservableObject
+public sealed partial class AccountFilesViewModel(OneDriveAccount account, IAuthService authService, IGraphService graphService, IAccountRepository repository) : ObservableObject
 {
-    private readonly OneDriveAccount    _account;
-    private readonly IAuthService       _authService;
-    private readonly IGraphService      _graphService;
-    private readonly IAccountRepository _repository;
+    private readonly OneDriveAccount    _account      = account;
+    private readonly IAuthService       _authService  = authService;
+    private readonly IGraphService      _graphService = graphService;
+    private readonly IAccountRepository _repository   = repository;
     private          string?            _accessToken;
     private          string?            _driveId;
 
@@ -48,20 +48,6 @@ public sealed partial class AccountFilesViewModel : ObservableObject
     // ── Events ────────────────────────────────────────────────────────────
 
     public event EventHandler<FolderTreeNodeViewModel>? ViewActivityRequested;
-
-    // ── Construction ──────────────────────────────────────────────────────
-
-    public AccountFilesViewModel(
-        OneDriveAccount    account,
-        IAuthService       authService,
-        IGraphService      graphService,
-        IAccountRepository repository)
-    {
-        _account      = account;
-        _authService  = authService;
-        _graphService = graphService;
-        _repository   = repository;
-    }
 
     // ── Commands ──────────────────────────────────────────────────────────
 

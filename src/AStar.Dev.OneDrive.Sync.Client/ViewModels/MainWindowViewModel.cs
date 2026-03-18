@@ -67,9 +67,9 @@ public sealed partial class MainWindowViewModel(
     {
         get
         {
-            _dashboardView ??= new DashboardView { DataContext = Dashboard };
+            field ??= new DashboardView { DataContext = Dashboard };
 
-            return _dashboardView;
+            return field;
         }
     }
 
@@ -77,9 +77,9 @@ public sealed partial class MainWindowViewModel(
     {
         get
         {
-            _filesView ??= new FilesView { DataContext = Files };
+            field ??= new FilesView { DataContext = Files };
 
-            return _filesView;
+            return field;
         }
     }
 
@@ -87,9 +87,9 @@ public sealed partial class MainWindowViewModel(
     {
         get
         {
-            _activityView ??= new ActivityView { DataContext = Activity };
+            field ??= new ActivityView { DataContext = Activity };
             
-            return _activityView;
+            return field;
         }
     }
 
@@ -97,9 +97,9 @@ public sealed partial class MainWindowViewModel(
     {
         get
         {
-            _accountsView ??= new AccountsView { DataContext = this };
+            field ??= new AccountsView { DataContext = this };
             
-            return _accountsView;
+            return field;
         }
     }
 
@@ -107,17 +107,11 @@ public sealed partial class MainWindowViewModel(
     {
         get
         {
-            _settingsView ??= new SettingsView { DataContext = Settings };
+            field ??= new SettingsView { DataContext = Settings };
 
-            return _settingsView;
+            return field;
         }
     }
-
-    private DashboardView? _dashboardView;
-    private FilesView?     _filesView;
-    private ActivityView?  _activityView;
-    private AccountsView?  _accountsView;
-    private SettingsView?  _settingsView;
 
     // ── Child view models ─────────────────────────────────────────────────
 
@@ -242,20 +236,29 @@ public sealed partial class MainWindowViewModel(
 
     private void OnSyncProgressChanged(object? sender, SyncProgressEventArgs e)
         => Dispatcher.UIThread.Post(() =>
-                                        {
-                                            AccountCardViewModel? card = Accounts.Accounts.FirstOrDefault(a => a.Id == e.AccountId);
-                                            if (card is null) return;
+        {
+            AccountCardViewModel? card = Accounts.Accounts.FirstOrDefault(a => a.Id == e.AccountId);
+            if(card is null)
+                return;
 
-                                            card.SyncState = e.IsComplete ? SyncState.Idle : SyncState.Syncing;
+            card.SyncState = e.IsComplete ? SyncState.Idle : SyncState.Syncing;
+            UpdateSyncStatus(e, card);
 
-                                            Dashboard.UpdateAccountSyncState(
-                                                e.AccountId,
-                                                card.SyncState,
-                                                card.ConflictCount);
+            Dashboard.UpdateAccountSyncState(e.AccountId, card);
 
-                                            if (card.Id == Accounts.ActiveAccount?.Id)
-                                                SyncStatusBarToActiveAccount();
-                                        });
+            if(card.Id == Accounts.ActiveAccount?.Id)
+                SyncStatusBarToActiveAccount();
+        });
+    private static void UpdateSyncStatus(SyncProgressEventArgs e, AccountCardViewModel card)
+    {
+        card.LastSyncText = e.SyncState == SyncState.NoSyncPathConfigured ? "No local sync path configured" : $"Syncing: {e.CurrentFile} ({e.Completed}/{e.Total})";
+
+        card.SyncState = e.SyncState switch
+        {
+            SyncState.NoSyncPathConfigured => SyncState.NoSyncPathConfigured,
+            _ => e.IsComplete ? SyncState.Idle : SyncState.Syncing,
+        };
+    }
 
     private void OnJobCompleted(object? sender, JobCompletedEventArgs e)
     {
@@ -281,9 +284,9 @@ public sealed partial class MainWindowViewModel(
             if (card is not null)
             {
                 card.ConflictCount++;
-                Dashboard.UpdateAccountSyncState(
-                    conflict.AccountId, card.SyncState, card.ConflictCount);
+                Dashboard.UpdateAccountSyncState(conflict.AccountId, card);
             }
+
             SyncStatusBarToActiveAccount();
         });
     }
