@@ -30,9 +30,8 @@ public sealed class LocalizationService : ILocalizationService
     private readonly string   _resourcePrefix;
 
     private Dictionary<string, string> _strings = [];
-    private CultureInfo               _current  = FallbackCulture;
 
-    public CultureInfo              CurrentCulture   => _current;
+    public CultureInfo CurrentCulture { get; private set; } = FallbackCulture;
     public IReadOnlyList<CultureInfo> AvailableCultures { get; private set; } = [];
 
     public event EventHandler<CultureInfo>? CultureChanged;
@@ -71,7 +70,7 @@ public sealed class LocalizationService : ILocalizationService
         var template = Get(key);
         try
         {
-            return string.Format(_current, template, args);
+            return string.Format(CurrentCulture, template, args);
         }
         catch (FormatException)
         {
@@ -81,9 +80,9 @@ public sealed class LocalizationService : ILocalizationService
 
     public async Task SetCultureAsync(CultureInfo culture)
     {
-        if (culture.Name == _current.Name) return;
+        if (culture.Name == CurrentCulture.Name) return;
         await LoadAsync(culture);
-        CultureChanged?.Invoke(this, _current);
+        CultureChanged?.Invoke(this, CurrentCulture);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────
@@ -110,7 +109,7 @@ public sealed class LocalizationService : ILocalizationService
             _strings = loaded;
 
             // Use the actual culture object for the name we successfully loaded
-            _current = name == target.Name
+            CurrentCulture = name == target.Name
                 ? target
                 : (name == FallbackCulture.Name ? FallbackCulture : new CultureInfo(name));
             return;
@@ -118,7 +117,7 @@ public sealed class LocalizationService : ILocalizationService
 
         // Should not happen if en-GB.json is embedded, but guard anyway
         _strings = [];
-        _current  = FallbackCulture;
+        CurrentCulture  = FallbackCulture;
     }
 
     private static async Task<Dictionary<string, string>> ParseAsync(Stream stream)
@@ -134,6 +133,7 @@ public sealed class LocalizationService : ILocalizationService
                 if (prop.Value.ValueKind == JsonValueKind.String)
                     result[prop.Name] = prop.Value.GetString()!;
             }
+
             return result;
         }
         catch (JsonException)

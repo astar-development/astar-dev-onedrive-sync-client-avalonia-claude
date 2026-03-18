@@ -52,13 +52,10 @@ public sealed partial class DashboardViewModel(SyncScheduler scheduler) : Observ
         RecalculateGlobals();
     }
 
-    public void UpdateAccountSyncState(
-        string    accountId,
-        SyncState state,
-        int       conflicts)
+    public void UpdateAccountSyncState(string accountId, AccountCardViewModel card)
     {
         DashboardAccountViewModel? section = AccountSections.FirstOrDefault(s => s.AccountId == accountId);
-        section?.UpdateSyncState(state, conflicts);
+        section?.UpdateSyncState(card);
         RecalculateGlobals();
     }
 

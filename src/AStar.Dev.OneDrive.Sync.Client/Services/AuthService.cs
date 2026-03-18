@@ -74,8 +74,7 @@ public sealed class AuthService(TokenCacheService cacheService) : IAuthService
         }
     }
 
-    public async Task<AuthResult> AcquireTokenSilentAsync(
-        string accountId, CancellationToken ct = default)
+    public async Task<AuthResult> AcquireTokenSilentAsync(string accountId, CancellationToken ct = default)
     {
         await EnsureCacheRegisteredAsync();
 

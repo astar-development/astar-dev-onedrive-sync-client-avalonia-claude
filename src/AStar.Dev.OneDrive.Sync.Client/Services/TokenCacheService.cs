@@ -21,12 +21,10 @@ public sealed class TokenCacheService
     private const string CacheFileName = "msal_token_cache.bin";
     private const string AppName       = "AStar.Dev.OneDrive.Sync";
 
-    private readonly string _cacheDirectory;
-
     public TokenCacheService()
     {
-        _cacheDirectory = GetPlatformCacheDirectory();
-        _ = Directory.CreateDirectory(_cacheDirectory);
+        CacheDirectory = GetPlatformCacheDirectory();
+        _ = Directory.CreateDirectory(CacheDirectory);
     }
 
     /// <summary>
@@ -46,7 +44,7 @@ public sealed class TokenCacheService
             {
                 StorageCreationProperties keyringProperties = new StorageCreationPropertiesBuilder(
                         CacheFileName,
-                        _cacheDirectory)
+                        CacheDirectory)
                     .WithLinuxKeyring(
                         schemaName:  "dev.astar.onedrivesync",
                         collection:  MsalCacheHelper.LinuxKeyRingDefaultCollection,
@@ -74,7 +72,7 @@ public sealed class TokenCacheService
             // Fallback — separate builder with only unprotected file
             storageProperties = new StorageCreationPropertiesBuilder(
                     CacheFileName + ".plaintext",
-                    _cacheDirectory)
+                    CacheDirectory)
                 .WithLinuxUnprotectedFile()
                 .Build();
         }
@@ -83,7 +81,7 @@ public sealed class TokenCacheService
             // Windows / macOS — use keychain/DPAPI
             storageProperties = new StorageCreationPropertiesBuilder(
                     CacheFileName,
-                    _cacheDirectory)
+                    CacheDirectory)
                 .WithMacKeyChain(
                     serviceName: AppName,
                     accountName: "MSALCache")
@@ -94,7 +92,7 @@ public sealed class TokenCacheService
         cacheHelper.RegisterCache(app.UserTokenCache);
     }
 
-    public string CacheDirectory => _cacheDirectory;
+    public string CacheDirectory { get; }
 
     private static string GetPlatformCacheDirectory()
     {

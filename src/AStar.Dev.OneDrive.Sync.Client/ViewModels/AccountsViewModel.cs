@@ -122,6 +122,7 @@ public sealed partial class AccountsViewModel(
             Wizard.Completed -= OnWizardCompleted;
             Wizard.Cancelled -= OnWizardCancelled;
         }
+
         Wizard = null;
     }
 

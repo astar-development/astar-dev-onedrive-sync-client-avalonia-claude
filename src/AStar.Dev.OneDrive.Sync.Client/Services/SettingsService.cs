@@ -46,6 +46,7 @@ public sealed class SettingsService : ISettingsService
                 svc.Current = new AppSettings();
             }
         }
+
         return svc;
     }
 

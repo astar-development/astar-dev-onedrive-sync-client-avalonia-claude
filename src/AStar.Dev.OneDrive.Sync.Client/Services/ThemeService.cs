@@ -21,16 +21,14 @@ public sealed class ThemeService : IThemeService, IDisposable
         new("avares://AStar.Dev.OneDrive.Sync.Client/Themes/Light.axaml");
     private static readonly Uri DarkUri =
         new("avares://AStar.Dev.OneDrive.Sync.Client/Themes/Dark.axaml");
-
-    private AppTheme _current = AppTheme.System;
     private IDisposable? _systemWatcher;
 
-    public AppTheme CurrentTheme => _current;
+    public AppTheme CurrentTheme { get; private set; } = AppTheme.System;
     public event EventHandler<AppTheme>? ThemeChanged;
 
     public void Apply(AppTheme theme)
     {
-        _current = theme;
+        CurrentTheme = theme;
 
         _systemWatcher?.Dispose();
         _systemWatcher = null;
@@ -46,7 +44,7 @@ public sealed class ThemeService : IThemeService, IDisposable
             ApplyVariant(theme);
         }
 
-        ThemeChanged?.Invoke(this, _current);
+        ThemeChanged?.Invoke(this, CurrentTheme);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────
@@ -71,7 +69,7 @@ public sealed class ThemeService : IThemeService, IDisposable
 
     private void OnActualThemeVariantChanged(object? sender, EventArgs e)
     {
-        if (_current != AppTheme.System) return;
+        if (CurrentTheme != AppTheme.System) return;
         Dispatcher.UIThread.Post(() =>
             ApplyVariant(GetSystemIsDark() ? AppTheme.Dark : AppTheme.Light));
     }

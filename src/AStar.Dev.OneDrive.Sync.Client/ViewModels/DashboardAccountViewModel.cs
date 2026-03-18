@@ -74,14 +74,12 @@ public sealed partial class DashboardAccountViewModel : ObservableObject
 
     // ── Construction ──────────────────────────────────────────────────────
 
-    public DashboardAccountViewModel(
-        OneDriveAccount account,
-        SyncScheduler   scheduler)
+    public DashboardAccountViewModel(OneDriveAccount account, SyncScheduler scheduler)
     {
         _account   = account;
         _scheduler = scheduler;
         _folderCount = account.SelectedFolderIds.Count;
-        UpdateLastSyncText();
+        UpdateLastSyncText(SyncState.Idle);
     }
 
     // ── Commands ──────────────────────────────────────────────────────────
@@ -106,12 +104,12 @@ public sealed partial class DashboardAccountViewModel : ObservableObject
 
     // ── Public update API (called by DashboardViewModel) ─────────────────
 
-    public void UpdateSyncState(SyncState state, int conflicts) => Dispatcher.UIThread.Post(() =>
+    public void UpdateSyncState(AccountCardViewModel card) => Dispatcher.UIThread.Post(() =>
                                                                         {
-                                                                            SyncState = state;
-                                                                            ConflictCount = conflicts;
-                                                                            IsSyncing = state == SyncState.Syncing;
-                                                                            UpdateLastSyncText();
+                                                                            SyncState = card.SyncState;
+                                                                            ConflictCount = card.ConflictCount;
+                                                                            IsSyncing = card.SyncState == SyncState.Syncing;
+                                                                            UpdateLastSyncText(card.SyncState);
                                                                         });
 
     public void AddRecentActivity(ActivityItemViewModel item) => Dispatcher.UIThread.Post(() =>
@@ -123,8 +121,10 @@ public sealed partial class DashboardAccountViewModel : ObservableObject
 
     // ── Private helpers ───────────────────────────────────────────────────
 
-    private void UpdateLastSyncText()
-        => LastSyncText = _account.LastSyncedAt is null
+    private void UpdateLastSyncText(SyncState syncState)
+        => LastSyncText =
+        syncState == SyncState.NoSyncPathConfigured ? "No local sync path configured" :
+         _account.LastSyncedAt is null
             ? "Never synced"
             : (DateTimeOffset.UtcNow - _account.LastSyncedAt.Value) switch
             {
