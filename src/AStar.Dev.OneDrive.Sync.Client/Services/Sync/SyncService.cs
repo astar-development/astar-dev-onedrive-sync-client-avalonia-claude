@@ -4,6 +4,7 @@ using AStar.Dev.OneDrive.Sync.Client.Models;
 using AStar.Dev.OneDrive.Sync.Client.Services.Auth;
 using AStar.Dev.OneDrive.Sync.Client.Services.Graph;
 using AStar.Dev.OneDrive.Sync.Client.ViewModels;
+using AStar.Dev.Utilities;
 using Serilog;
 
 namespace AStar.Dev.OneDrive.Sync.Client.Services.Sync;
@@ -42,6 +43,8 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
 
             await SyncFolderAsync(account, token, folderId, ct);
         }
+
+        RaiseProgress(account.Id, string.Empty, 0, 0, "Completed", SyncState.Completed);
     }
 
     public async Task ResolveConflictAsync(SyncConflict conflict, ConflictPolicy policy, CancellationToken ct = default)
@@ -62,51 +65,74 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
 
     private async Task SyncFolderAsync(OneDriveAccount account, string token, string folderId, CancellationToken ct)
     {
-        AccountEntity? entity = await accountRepository.GetByIdAsync(account.Id);
-        SyncFolderEntity? folderEntity = entity?.SyncFolders.FirstOrDefault(f => f.FolderId == folderId);
-
-        var deltaLink = folderEntity?.DeltaLink;
-
-        RaiseProgress(account.Id, folderId, 0, 0, "Fetching changes ...", SyncState.Syncing);
-
-        DeltaResult delta = await graphService.GetDeltaAsync(token, folderId, deltaLink, ct);
-
-        if(delta.Items.Count == 0)
+        Serilog.Log.Information("[SyncFolder] Starting folder {FolderId}", folderId);
+        try
         {
+            AccountEntity? entity = await accountRepository.GetByIdAsync(account.Id);
+            Serilog.Log.Information("[SyncFolder] Got entity, folders={Count}",
+                entity?.SyncFolders.Count ?? -1);
+
+            SyncFolderEntity? folderEntity = entity?.SyncFolders
+            .FirstOrDefault(f => f.FolderId == folderId);
+
+            var deltaLink = folderEntity?.DeltaLink;
+            Serilog.Log.Information("[SyncFolder] DeltaLink={HasLink}",
+                deltaLink is not null);
+
+            RaiseProgress(account.Id, folderId, 0, 0, "Fetching changes\u2026", SyncState.Syncing);
+
+            DeltaResult delta = await graphService.GetDeltaAsync(token, folderId, deltaLink, ct);
+            Serilog.Log.Information("[SyncFolder] Delta items={Count}", delta.Items.Count);
+
+            if (delta.Items.Count == 0)
+            {
+                if (delta.NextDeltaLink is not null)
+                    await accountRepository.UpdateDeltaLinkAsync(
+                        account.Id, folderId, delta.NextDeltaLink);
+
+                account.LastSyncedAt = DateTimeOffset.UtcNow;
+                if (entity is not null)
+                {
+                    entity.LastSyncedAt = DateTimeOffset.UtcNow;
+                    await accountRepository.UpsertAsync(entity);
+                }
+
+                RaiseProgress(account.Id, folderId, 0, 0,
+                    "No changes", SyncState.Idle);
+                return;
+            }
+
+            List<SyncJob> jobs = BuildJobs(account, folderId, delta.Items);
+            (List<SyncJob>? cleanJobs, List<SyncConflict>? conflicts) = await ClassifyJobsAsync(account, jobs);
+
+            foreach(SyncConflict conflict in conflicts)
+            {
+                await syncRepository.AddConflictAsync(conflict);
+                ConflictDetected?.Invoke(this, conflict);
+            }
+
+            await ProcessJobQueueAsync(account, token, cleanJobs, ct);
+
             if(delta.NextDeltaLink is not null)
+            {
                 await accountRepository.UpdateDeltaLinkAsync(account.Id, folderId, delta.NextDeltaLink);
+            }
 
-            RaiseProgress(account.Id, folderId, 0, 0, "No changes", SyncState.Completed);
+            if(entity is not null)
+            {
+                entity.LastSyncedAt = DateTimeOffset.UtcNow;
+                await accountRepository.UpsertAsync(entity);
+            }
 
-            return;
+            account.LastSyncedAt = DateTimeOffset.UtcNow;
         }
-
-        List<SyncJob> jobs = BuildJobs(account, folderId, delta.Items);
-        (List<SyncJob>? cleanJobs, List<SyncConflict>? conflicts) = await ClassifyJobsAsync(account, jobs);
-
-        if(cleanJobs.Count > 0)
-            await syncRepository.EnqueueJobsAsync(cleanJobs);
-
-        foreach(SyncConflict conflict in conflicts)
+        catch(Exception ex)
         {
-            await syncRepository.AddConflictAsync(conflict);
-            ConflictDetected?.Invoke(this, conflict);
+            Serilog.Log.Error(ex, "[SyncFolder] Error in folder {FolderId}: {Message}",
+                folderId, ex.Message);
+            RaiseProgress(account.Id, folderId, 0, 0,
+                ex.Message, SyncState.Completed);
         }
-
-        await ProcessJobQueueAsync(account, cleanJobs, ct);
-
-        if(delta.NextDeltaLink is not null)
-        {
-            await accountRepository.UpdateDeltaLinkAsync(account.Id, folderId, delta.NextDeltaLink);
-        }
-
-        if(entity is not null)
-        {
-            entity.LastSyncedAt = DateTimeOffset.UtcNow;
-            await accountRepository.UpsertAsync(entity);
-        }
-
-        account.LastSyncedAt = DateTimeOffset.UtcNow;
     }
 
     // ── Job building ──────────────────────────────────────────────────────
@@ -121,7 +147,9 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
                 continue;
 
             var relativePath = item.RelativePath ?? item.Name;
-            var localPath = Path.Combine(account.LocalSyncPath, relativePath);
+            var localPath    = Path.Combine(
+                account.LocalSyncPath,
+                relativePath.Replace('/', Path.DirectorySeparatorChar));
 
             if(item.IsDeleted)
             {
@@ -135,6 +163,7 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
                         RelativePath = relativePath,
                         LocalPath = localPath,
                         Direction = SyncDirection.Delete,
+                        DownloadUrl = item.DownloadUrl,
                         RemoteModified = item.LastModified ?? DateTimeOffset.UtcNow
                     });
                 }
@@ -228,67 +257,35 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
 
     // ── Job processing ────────────────────────────────────────────────────
 
-    private async Task ProcessJobQueueAsync(OneDriveAccount account, List<SyncJob> jobs, CancellationToken ct)
+    private async Task ProcessJobQueueAsync(OneDriveAccount account, string token, List<SyncJob> jobs, CancellationToken ct)
     {
-        var completed = 0;
-        var total = jobs.Count;
+        if(jobs.Count == 0)
+            return;
 
-        foreach(SyncJob job in jobs)
-        {
-            if(ct.IsCancellationRequested)
-                break;
+        Serilog.Log.Information(
+            "[SyncService] Starting parallel download of {Count} items " +
+            "for {Email} with {Workers} workers",
+            jobs.Count, account.Email, 8);
 
-            RaiseProgress(account.Id, job.FolderId, completed, total, job.RelativePath, SyncState.Syncing);
+        // Enqueue all jobs to DB first so they survive a crash mid-sync
+        await syncRepository.EnqueueJobsAsync(jobs);
 
-            await syncRepository.UpdateJobStateAsync(job.Id, SyncJobState.InProgress);
+        var pipeline = new ParallelDownloadPipeline(syncRepository, workerCount: 8);
 
-            try
-            {
-                await ExecuteJobAsync(job, ct);
-
-                SyncJob completedJob = job with
-                {
-                    State = SyncJobState.Completed,
-                    CompletedAt = DateTimeOffset.UtcNow
-                };
-
-                await syncRepository.UpdateJobStateAsync(
-                    job.Id, SyncJobState.Completed);
-
-                JobCompleted?.Invoke(this, new JobCompletedEventArgs(completedJob));
-            }
-            catch(Exception ex)
-            {
-                SyncJob failedJob = job with
-                {
-                    State = SyncJobState.Failed,
-                    ErrorMessage = ex.Message,
-                    CompletedAt = DateTimeOffset.UtcNow
-                };
-
-                await syncRepository.UpdateJobStateAsync(
-                    job.Id, SyncJobState.Failed, ex.Message);
-
-                JobCompleted?.Invoke(this, new JobCompletedEventArgs(failedJob));
-            }
-
-            completed++;
-        }
-
-        RaiseProgress(account.Id,
-            jobs.FirstOrDefault()?.FolderId ?? string.Empty,
-            completed, total, string.Empty, SyncState.Completed);
-
-        await syncRepository.ClearCompletedJobsAsync(account.Id);
+        await pipeline.RunAsync(
+            jobs: jobs,
+            accessToken: token,
+            onProgress: args => SyncProgressChanged?.Invoke(this, args),
+            onJobCompleted: args => JobCompleted?.Invoke(this, args),  // ← add this
+            accountId: account.Id,
+            folderId: jobs.FirstOrDefault()?.FolderId ?? string.Empty,
+            ct: ct);
     }
 
-    private static async Task ExecuteJobAsync(SyncJob job, CancellationToken ct)
+    private async Task ExecuteJobAsync(SyncJob job, CancellationToken ct)
     {
         switch(job.Direction)
         {
-            case SyncDirection.Download:
-                await DownloadFileAsync(job, ct);
-                break;
             case SyncDirection.Delete:
                 if(File.Exists(job.LocalPath))
                     File.Delete(job.LocalPath);
@@ -297,29 +294,6 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
                 // Upload wired in a later step
                 break;
         }
-    }
-
-    private static async Task DownloadFileAsync(SyncJob job, CancellationToken ct)
-    {
-        if(job.DownloadUrl is null)
-            return;
-
-        var dir = Path.GetDirectoryName(job.LocalPath);
-        if(dir is not null)
-            _ = Directory.CreateDirectory(dir);
-
-        using var http = new HttpClient();
-        using HttpResponseMessage response = await http.GetAsync(
-            job.DownloadUrl,
-            HttpCompletionOption.ResponseHeadersRead, ct);
-
-        _ = response.EnsureSuccessStatusCode();
-
-        await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
-        await using FileStream file = File.Create(job.LocalPath);
-        await stream.CopyToAsync(file, ct);
-
-        File.SetLastWriteTimeUtc(job.LocalPath, job.RemoteModified.UtcDateTime);
     }
 
     private async Task ApplyConflictOutcomeAsync(SyncConflict conflict, ConflictOutcome outcome, CancellationToken ct)
