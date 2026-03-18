@@ -85,16 +85,13 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
         List<SyncJob> jobs = BuildJobs(account, folderId, delta.Items);
         (List<SyncJob>? cleanJobs, List<SyncConflict>? conflicts) = await ClassifyJobsAsync(account, jobs);
 
-        if(cleanJobs.Count > 0)
-            await syncRepository.EnqueueJobsAsync(cleanJobs);
-
         foreach(SyncConflict conflict in conflicts)
         {
             await syncRepository.AddConflictAsync(conflict);
             ConflictDetected?.Invoke(this, conflict);
         }
 
-        await ProcessJobQueueAsync(account, cleanJobs, ct);
+        await ProcessJobQueueAsync(account, token, cleanJobs, ct);
 
         if(delta.NextDeltaLink is not null)
         {
@@ -232,67 +229,34 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
 
     // ── Job processing ────────────────────────────────────────────────────
 
-    private async Task ProcessJobQueueAsync(OneDriveAccount account, List<SyncJob> jobs, CancellationToken ct)
+    private async Task ProcessJobQueueAsync(OneDriveAccount   account,string            token,List<SyncJob>     jobs,CancellationToken ct)
     {
-        var completed = 0;
-        var total = jobs.Count;
+        if (jobs.Count == 0) return;
 
-        foreach(SyncJob job in jobs)
-        {
-            if(ct.IsCancellationRequested)
-                break;
+        Serilog.Log.Information(
+            "[SyncService] Starting parallel download of {Count} items " +
+            "for {Email} with {Workers} workers",
+            jobs.Count, account.Email, 8);
 
-            RaiseProgress(account.Id, job.FolderId, completed, total, job.RelativePath, SyncState.Syncing);
+        // Enqueue all jobs to DB first so they survive a crash mid-sync
+        await syncRepository.EnqueueJobsAsync(jobs);
 
-            await syncRepository.UpdateJobStateAsync(job.Id, SyncJobState.InProgress);
+        var pipeline = new ParallelDownloadPipeline(syncRepository, workerCount: 8);
 
-            try
-            {
-                await ExecuteJobAsync(job, ct);
-
-                SyncJob completedJob = job with
-                {
-                    State = SyncJobState.Completed,
-                    CompletedAt = DateTimeOffset.UtcNow
-                };
-
-                await syncRepository.UpdateJobStateAsync(
-                    job.Id, SyncJobState.Completed);
-
-                JobCompleted?.Invoke(this, new JobCompletedEventArgs(completedJob));
-            }
-            catch(Exception ex)
-            {
-                SyncJob failedJob = job with
-                {
-                    State = SyncJobState.Failed,
-                    ErrorMessage = ex.Message,
-                    CompletedAt = DateTimeOffset.UtcNow
-                };
-
-                await syncRepository.UpdateJobStateAsync(
-                    job.Id, SyncJobState.Failed, ex.Message);
-
-                JobCompleted?.Invoke(this, new JobCompletedEventArgs(failedJob));
-            }
-
-            completed++;
-        }
-
-        RaiseProgress(account.Id,
-            jobs.FirstOrDefault()?.FolderId ?? string.Empty,
-            completed, total, string.Empty, SyncState.Completed);
-
-        await syncRepository.ClearCompletedJobsAsync(account.Id);
+        await pipeline.RunAsync(
+            jobs:          jobs,
+            accessToken:   token,
+            onProgress:    args => SyncProgressChanged?.Invoke(this, args),
+            onJobCompleted: args => JobCompleted?.Invoke(this, args),  // ← add this
+            accountId:     account.Id,
+            folderId:      jobs.FirstOrDefault()?.FolderId ?? string.Empty,
+            ct:            ct);
     }
 
     private async Task ExecuteJobAsync(SyncJob job, CancellationToken ct)
     {
         switch(job.Direction)
         {
-            case SyncDirection.Download:
-                await DownloadFileAsync(job, ct);
-                break;
             case SyncDirection.Delete:
                 if(File.Exists(job.LocalPath))
                     File.Delete(job.LocalPath);
@@ -301,29 +265,6 @@ public sealed class SyncService(IAuthService authService, IGraphService graphSer
                 // Upload wired in a later step
                 break;
         }
-    }
-
-    private async Task DownloadFileAsync(SyncJob job, CancellationToken ct)
-    {
-        if(job.DownloadUrl.IsNullOrWhiteSpace())
-        {
-            job.DownloadUrl = $"/me/drive/items/{job.RemoteItemId}";
-        }
-
-        var dir = Path.GetDirectoryName(job.LocalPath);
-        if(dir is not null)
-            _ = Directory.CreateDirectory(dir);
-
-        using var http = new HttpClient();
-        using HttpResponseMessage response = await http.GetAsync(job.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
-
-        _ = response.EnsureSuccessStatusCode();
-
-        await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
-        await using FileStream file = File.Create(job.LocalPath);
-        await stream.CopyToAsync(file, ct);
-
-        File.SetLastWriteTimeUtc(job.LocalPath, job.RemoteModified.UtcDateTime);
     }
 
     private async Task ApplyConflictOutcomeAsync(SyncConflict conflict, ConflictOutcome outcome, CancellationToken ct)
