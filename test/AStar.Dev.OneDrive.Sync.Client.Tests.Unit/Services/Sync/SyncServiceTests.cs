@@ -174,7 +174,7 @@ public class SyncServiceTests
             .Returns(AuthResult.Failure("Auth failed"));
 
         await service.ResolveConflictAsync(conflict, ConflictPolicy.Ignore, TestContext.Current.CancellationToken);
-               await mockSyncRepository.DidNotReceive().ResolveConflictAsync(Arg.Any<Guid>(), Arg.Any<ConflictPolicy>());
+        await mockSyncRepository.DidNotReceive().ResolveConflictAsync(Arg.Any<Guid>(), Arg.Any<ConflictPolicy>());
     }
 
     [Theory]
@@ -210,7 +210,7 @@ public class SyncServiceTests
         var service = new SyncService(mockAuthService, mockGraphService, mockAccountRepository, mockSyncRepository);
 
         var eventFired = false;
-        EventHandler<SyncProgressEventArgs>? handler = (s, args) => eventFired = true;
+        void handler(object? s, SyncProgressEventArgs args) => eventFired = true;
 
         service.SyncProgressChanged += handler;
         service.SyncProgressChanged -= handler;
@@ -230,7 +230,7 @@ public class SyncServiceTests
         var service = new SyncService(mockAuthService, mockGraphService, mockAccountRepository, mockSyncRepository);
 
         var eventFired = false;
-        EventHandler<SyncConflict>? handler = (s, conflict) => eventFired = true;
+        void handler(object? s, SyncConflict conflict) => eventFired = true;
 
         service.ConflictDetected += handler;
 
