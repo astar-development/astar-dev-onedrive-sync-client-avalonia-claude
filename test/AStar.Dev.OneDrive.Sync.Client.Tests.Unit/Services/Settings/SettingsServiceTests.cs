@@ -177,18 +177,6 @@ public class SettingsServiceTests
     }
 
     [Fact]
-    public void SettingsChanged_ShouldBeNullByDefault()
-    {
-        var service = new SettingsService();
-        var eventHandlerInvoked = false;
-
-        // This test verifies that the event handler property exists and can receive subscribers
-        service.SettingsChanged += (s, e) => eventHandlerInvoked = true;
-
-        // Event handler successfully subscribed - no exception thrown
-    }
-
-    [Fact]
     public async Task MultipleSettingsChanges_ShouldMaintainState()
     {
         var service = new SettingsService();
