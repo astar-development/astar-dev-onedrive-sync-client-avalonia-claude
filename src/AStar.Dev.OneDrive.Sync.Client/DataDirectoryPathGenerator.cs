@@ -6,7 +6,7 @@ public static class DataDirectoryPathGenerator
 {
     public static string GetPlatformUserDataDirectory(string email)
         => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-            .CombinePath(ApplicationMetadata.ApplicationName, email.Replace('@', '-').Replace('.', '_'));
+            .CombinePath(ApplicationMetadata.ApplicationName, email.Replace('@', '-').Replace('.', '-'));
 
     public static string GetPlatformDataDirectory()
         => OperatingSystem.IsWindows()

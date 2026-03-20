@@ -9,7 +9,7 @@ public class App
         public void generate_a_valid_directory_for_the_user_email_when_on_Windows()
         {
             if(!OperatingSystem.IsWindows()) return;
-            const string expected = "Documents/AStar.Dev.OneDrive.Sync/test-email_example_com";
+            const string expected = "Documents/AStar.Dev.OneDrive.Sync/test-email-example-com";
 
             var actual = DataDirectoryPathGenerator.GetPlatformUserDataDirectory("test@email.example.com");
 
@@ -20,7 +20,7 @@ public class App
         public void generate_a_valid_directory_for_the_user_email_when_on_MacOs()
         {
             if(!OperatingSystem.IsMacOS()) return;
-            const string expected = "Documents/AStar.Dev.OneDrive.Sync/test-email_example_com";
+            const string expected = "Documents/AStar.Dev.OneDrive.Sync/test-email-example-com";
 
             var actual = DataDirectoryPathGenerator.GetPlatformUserDataDirectory("test@email.example.com");
 
@@ -31,7 +31,7 @@ public class App
         public void generate_a_valid_directory_for_the_user_email_when_on_Linux()
         {
             if(!OperatingSystem.IsLinux()) return;
-            const string expected = "Documents/AStar.Dev.OneDrive.Sync/test-email_example_com";
+            const string expected = "Documents/AStar.Dev.OneDrive.Sync/test-email-example-com";
 
             var actual = DataDirectoryPathGenerator.GetPlatformUserDataDirectory("test@email.example.com");
 
